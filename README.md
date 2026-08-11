@@ -339,3 +339,9 @@ easytier 的构建脚本给 `Packet.lib` 输出了相对链接路径，作为依
 > TUN 已在 Windows 上实测通过（需管理员权限）：双节点建链后，
 > 用 `tests/test_tun_manual.py` 可验证 TUN 数据面（ping 经隧道可达）。
 > 同机回环测试时节点需设 `bind_device: False`，否则连接报 WSAEADDRNOTAVAIL。
+
+**Q10：easytier 会不会影响我机器上的 Radmin VPN / 其它 VPN 网卡或劫持出站？**
+不会。easytier 创建的是**自己独立的 wintun 网卡**（`et_*`），只添加
+`虚拟网段/24` 的 on-link 路由，**不设默认路由**，不触碰其它网卡（实测
+Radmin VPN 网卡的 IP/状态/路由在 easytier 运行前后完全一致）。停止节点后
+网卡与路由自动清理。
