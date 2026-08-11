@@ -186,7 +186,8 @@ fn to_hex(bytes: &[u8]) -> String {
 /// 一个 EasyTier 节点。
 ///
 /// 用 TOML 字符串或 dict 创建（字段与 `easytier-core` 的配置文件一致），
-/// 每个节点拥有独立的 tokio runtime；节点被垃圾回收时自动停止。
+/// 每个节点拥有独立的 tokio runtime。用完请显式调用 `stop()` 优雅停止；
+/// 对象被回收时仅在后台关闭 runtime，不保证清理 TUN 等系统资源。
 #[pyclass(module = "easytier_py")]
 struct Node {
     /// 底层 EasyTier 核心实例。

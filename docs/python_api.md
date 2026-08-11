@@ -51,7 +51,9 @@ Node(config: Union[str, dict])
 - `config` 为 **dict** 时自动转换为 TOML（dict 中的 `None` 值被忽略）；
 - 字段与 `easytier-core` 配置文件一致，详见 [README 配置说明](../README.md#配置说明)。
 
-创建节点**不会**立即启动，需要调用 `start()`。节点对象被垃圾回收时会自动 `stop()`。
+创建节点**不会**立即启动，需要调用 `start()`。`stop()` 是幂等的，请显式调用以
+优雅停止并释放资源；节点被垃圾回收时只会在后台关闭其运行时（不阻塞、不保证清理
+TUN 等资源），因此**用完务必调用 `stop()`**。
 
 ```python
 from easytier_py import Node

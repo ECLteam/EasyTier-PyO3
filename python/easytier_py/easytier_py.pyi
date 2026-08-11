@@ -18,8 +18,9 @@ def version() -> str:
 class Node:
     """一个 EasyTier 节点。
 
-    用 TOML 字符串或 dict 创建（字段与 easytier-core 配置文件一致），
-    节点被垃圾回收时自动停止。
+    用 TOML 字符串或 dict 创建（字段与 easytier-core 配置文件一致）。
+    用完请显式调用 stop() 以优雅停止；对象被回收时仅在后台关闭其运行时，
+    不保证清理 TUN 等系统资源。
     """
 
     def __init__(self, config: Config) -> None:
