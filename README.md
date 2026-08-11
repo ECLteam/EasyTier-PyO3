@@ -44,9 +44,22 @@ node.stop()
 | Python | 3.8+ | 64 位，建议使用虚拟环境 |
 | maturin | >=1.5 | Rust/Python 桥接构建工具 |
 | C/C++ 工具链 | — | Windows 需 Visual Studio Build Tools (C++ 工作负载)；Linux/macOS 需 gcc/clang |
+| protoc | — | 见下方「按平台」 |
 
-> 首次构建会联网下载 EasyTier 的数百个依赖，并自动下载 `protoc`，
-> 根据机器性能可能需要 **10 ~ 40 分钟**，属正常现象。
+> 首次构建会联网下载 EasyTier 的数百个依赖，根据机器性能可能需要
+> **10 ~ 40 分钟**，属正常现象。
+
+#### 按平台
+
+| 平台 | 额外要求 |
+| --- | --- |
+| Windows | **Visual Studio Build Tools**（C++ 工作负载，编译 wintun/windivert 等 C 代码）；**LLVM**（提供 `libclang.dll`，bindgen 需要，`winget install LLVM.LLVM`）；protoc 可让 easytier-proto 自动下载，或参照 `.cargo/config.toml.example` 配置本机路径 |
+| Linux | C 编译器；protoc：`sudo apt install protobuf-compiler`（Debian/Ubuntu）或 `sudo dnf install protobuf-compiler`（Fedora） |
+| macOS | Xcode Command Line Tools（`xcode-select --install`）；protoc：`brew install protobuf` |
+
+> 机器相关工具路径（如 Windows 上的 `PROTOC` / `LIBCLANG_PATH`）放在
+> `.cargo/config.toml`（已被 gitignore，参考 `.cargo/config.toml.example`），
+> 不影响其他平台/协作者。
 
 ### 2. 安装 Rust 工具链
 
@@ -308,9 +321,9 @@ Windows 下编译 `windivert` 等 C-FFI 依赖需要 `libclang.dll`。安装 LLV
 （`winget install LLVM.LLVM`），然后把其 `bin` 目录设置到 `LIBCLANG_PATH`
 环境变量后重新构建。
 
-> 本项目根目录的 `.cargo/config.toml` 已内置本机的 `PROTOC` 与 `LIBCLANG_PATH`
-> 路径（cargo 会把它们注入所有构建脚本，从 PyCharm/pip 启动也能生效）。
-> 更换机器后请按注释修改这两个路径。
+> 机器相关的 `PROTOC` / `LIBCLANG_PATH` 可写在 `.cargo/config.toml`
+> （该文件已被 gitignore，参考 `.cargo/config.toml.example`），
+> cargo 会把它注入所有构建脚本，从 PyCharm/pip 启动也能生效。
 
 **Q8：链接报错 `LNK1181: 无法打开输入文件"Packet.lib"`？**
 easytier 的构建脚本给 `Packet.lib` 输出了相对链接路径，作为依赖库编译时该路径

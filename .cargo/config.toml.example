@@ -1,0 +1,15 @@
+# 本机工具链路径配置（示例模板）。
+#
+# 用途：把本机工具路径注入 cargo 构建脚本，供 easytier 依赖的构建阶段使用。
+# 复制为 .cargo/config.toml 后按本机情况修改（.cargo/config.toml 已被 .gitignore
+# 忽略，不会提交，避免机器相关路径影响其他平台 / 其他协作者）。
+#
+#   PROTOC         - protoc 可执行文件路径（easytier-proto 构建 proto 需要）。
+#                    Windows 下找不到时会尝试联网下载，可能超时失败，建议指向本机安装；
+#                    Linux/macOS 请用系统包管理器安装 protobuf-compiler，
+#                    一般无需在此配置（系统 PATH 即可）。
+#   LIBCLANG_PATH  - 包含 libclang.dll 的目录（**仅 Windows** 需要：bindgen 编译
+#                    windivert 等 C-FFI 依赖时使用；LLVM / VS 自带）。
+[env]
+# PROTOC = { value = "C:/path/to/protoc.exe" }
+# LIBCLANG_PATH = { value = "C:/Program Files/LLVM/bin" }
