@@ -11,3 +11,6 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# 会话记忆
+/.memory/
