@@ -1,0 +1,18 @@
+EasyTier-PyO3 NOTICE
+====================
+
+本项目（EasyTier-PyO3，PyO3 编写的 EasyTier Python 绑定）整体以
+GNU LGPL-3.0 许可证发布，详见 LICENSE。
+
+本项目静态链接以下 LGPL-3.0 组件：
+  - easytier / easytier-core（EasyTier mesh VPN 核心）
+    来源：https://github.com/EasyTier/EasyTier （GNU LGPL-3.0）
+    使用 easytier 即视为接受其 LGPL-3.0 条款；如需基于本项目做修改
+    或再分发，请遵循 LGPL-3.0（提供源码、保留声明、保证可再链接）。
+
+随 wheel 分发的第三方二进制（来自 easytier 上游 third_party，各自持有独立许可证）：
+  - wintun.dll        —— WireGuard LLC / wintun.net（TUN 驱动库）
+  - Packet.dll/.lib   —— Npcap SDK（数据包捕获导入库）
+  - WinDivert64.sys   —— WinDivert（GPL-2.0，仅运行时按需加载，不参与链接）
+
+使用本项目前请阅读并遵守以上组件的各自许可证条款。
