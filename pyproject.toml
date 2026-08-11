@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "easytier-pyo3"
+version = "0.1.0"
+description = "Python bindings for EasyTier mesh VPN core (PyO3)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+]
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "easytier_py"
+# python/ 下的 easytier_py 包随 wheel 一起安装，
+# 其中携带运行时 DLL（wintun.dll / Packet.dll / WinDivert64.sys）与类型存根。
+python-source = "python"

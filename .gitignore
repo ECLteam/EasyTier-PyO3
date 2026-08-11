@@ -1,0 +1,13 @@
+# Rust
+/target
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/

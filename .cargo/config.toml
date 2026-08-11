@@ -1,0 +1,14 @@
+# 本机工具链路径配置。
+#
+# 说明：这里的两个环境变量会被 cargo 注入到所有构建脚本中，因此无论从
+# PyCharm / pip / 普通终端启动构建都能生效。若你的环境中已经设置了同名
+# 环境变量，则以其为准（此处仅作为兜底，不会覆盖已有值）。
+#
+# 更换机器后请按需修改：
+#   PROTOC         - protoc 可执行文件路径（easytier-proto 构建 proto 需要；
+#                    找不到时它会尝试联网下载，容易超时失败）
+#   LIBCLANG_PATH  - 包含 libclang.dll 的目录（bindgen 编译 Windows C-FFI
+#                    依赖如 windivert 时需要，LLVM/Visual Studio 均自带）
+[env]
+PROTOC = { value = "C:/Users/vcmrif/AppData/Local/Microsoft/WinGet/Packages/Google.Protobuf_Microsoft.Winget.Source_8wekyb3d8bbwe/bin/protoc.exe" }
+LIBCLANG_PATH = { value = "F:/LLVM/bin" }
