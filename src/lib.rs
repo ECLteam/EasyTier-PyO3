@@ -192,9 +192,21 @@ struct Node {
     /// 底层 EasyTier 核心实例。
     instance: Arc<NativeCoreInstance>,
     /// 节点自己的 tokio runtime，承载所有后台任务。
-    runtime: tokio::runtime::Runtime,
+    /// 用 `Option` 包裹，便于在 `Drop` 中取出所有权做后台关闭。
+    runtime: Option<tokio::runtime::Runtime>,
     /// 节点事件总线订阅者，用于 `events()` / `next_event()`。
     event_rx: Option<tokio::sync::broadcast::Receiver<GlobalCtxEvent>>,
+}
+
+impl Node {
+    /// 返回节点的 tokio runtime handle。
+    fn handle(&self) -> tokio::runtime::Handle {
+        self.runtime
+            .as_ref()
+            .expect("Node runtime 不应为空")
+            .handle()
+            .clone()
+    }
 }
 
 #[pymethods]
@@ -222,7 +234,7 @@ impl Node {
         let event_rx = subscribe_native_instance_event(&instance);
         Ok(Self {
             instance,
-            runtime,
+            runtime: Some(runtime),
             event_rx,
         })
     }
@@ -231,7 +243,7 @@ impl Node {
 
     /// 启动节点，阻塞直到启动完成；失败时抛出 `RuntimeError`。
     fn start(&mut self, py: Python<'_>) -> PyResult<()> {
-        run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.start().await
         })?
         .map_err(to_py_err)
@@ -239,14 +251,14 @@ impl Node {
 
     /// 停止节点（幂等）。
     fn stop(&mut self, py: Python<'_>) -> PyResult<()> {
-        run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.stop().await;
         })
     }
 
     /// 阻塞直到节点停止。
     fn wait(&mut self, py: Python<'_>) -> PyResult<()> {
-        run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.wait().await;
         })
     }
@@ -344,7 +356,7 @@ impl Node {
 
     /// 所有对端连接快照，每一项包含 peer_id 与连接信息。
     fn peers(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let snaps = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let snaps = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.peer_snapshots().await
         })?;
         let mut arr = Vec::new();
@@ -363,7 +375,7 @@ impl Node {
 
     /// 本节点的信息快照（IP、主机名、监听地址、版本、STUN 等）。
     fn node_info(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let snap = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let snap = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.node_snapshot().await
         })?;
         let mut node = serde_json::Map::new();
@@ -413,7 +425,7 @@ impl Node {
 
     /// 当前路由快照列表。
     fn routes(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let routes = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let routes = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.route_snapshots().await
         })?;
         serde_to_py(py, serde_json::to_value(&routes).map_err(to_py_err)?)
@@ -421,14 +433,14 @@ impl Node {
 
     /// 当前路由表文本（便于调试）。
     fn dump_route(&self, py: Python<'_>) -> PyResult<String> {
-        run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.dump_route().await
         })
     }
 
     /// 全局对端图快照。
     fn global_peer_map(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let snap = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let snap = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.global_peer_map_snapshot()
         })?;
         serde_to_py(py, serde_json::to_value(&snap).map_err(to_py_err)?)
@@ -436,7 +448,7 @@ impl Node {
 
     /// 本节点公网 IPv6 信息。
     fn local_public_ipv6(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let info = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let info = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.local_public_ipv6_info().await
         })?;
         serde_to_py(py, serde_json::to_value(&info).map_err(to_py_err)?)
@@ -444,7 +456,7 @@ impl Node {
 
     /// 外部网络（foreign network）的路由信息。
     fn foreign_network_route_infos(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let info = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let info = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.foreign_network_route_infos().await
         })?;
         serde_to_py(py, serde_json::to_value(&info).map_err(to_py_err)?)
@@ -456,7 +468,7 @@ impl Node {
         py: Python<'_>,
         include_trusted_keys: bool,
     ) -> PyResult<Py<PyAny>> {
-        let map = run_blocking(py, &self.instance, &self.runtime.handle(), move |i| async move {
+        let map = run_blocking(py, &self.instance, &self.handle(), move |i| async move {
             i.foreign_network_snapshots(include_trusted_keys).await
         })?;
         let mut obj = serde_json::Map::new();
@@ -496,7 +508,7 @@ impl Node {
 
     /// 外部网络路由汇总。
     fn foreign_network_route_summary(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let summary = run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        let summary = run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.foreign_network_route_summary().await
         })?;
         serde_to_py(py, serde_json::to_value(&summary).map_err(to_py_err)?)
@@ -626,7 +638,7 @@ impl Node {
         let result = run_blocking(
             py,
             &self.instance,
-            &self.runtime.handle(),
+            &self.handle(),
             move |i| async move { i.close_peer_conn(peer_id, &conn_id).await.map_err(to_py_err) },
         )?;
         result?;
@@ -642,14 +654,14 @@ impl Node {
                     .map_err(|e| PyValueError::new_err(e.to_string()))
             })
             .collect::<PyResult<Vec<_>>>()?;
-        run_blocking(py, &self.instance, &self.runtime.handle(), move |i| async move {
+        run_blocking(py, &self.instance, &self.handle(), move |i| async move {
             i.update_exit_nodes(ips).await;
         })
     }
 
     /// 刷新 ACL 组（读取路由信息后重新计算）。
     fn refresh_acl_groups(&mut self, py: Python<'_>) -> PyResult<()> {
-        run_blocking(py, &self.instance, &self.runtime.handle(), |i| async move {
+        run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.refresh_acl_groups().await;
         })
     }
@@ -683,7 +695,7 @@ impl Node {
             .event_rx
             .take()
             .ok_or_else(|| PyRuntimeError::new_err("事件订阅不可用"))?;
-        let handle = self.runtime.handle().clone();
+        let handle = self.handle();
         // 阻塞等待事件时释放 GIL；同时把 receiver 一并返回，避免丢失订阅。
         // 注意：tokio::time::timeout 必须在 runtime 上下文内构造，
         // 因此把它放进 block_on 的 async 块里，不能作为 block_on 的实参。
@@ -726,9 +738,12 @@ impl Drop for Node {
     /// 注意：这里**不能**阻塞等待异步 `stop()`——pyo3 的 pyclass 析构
     /// 发生在持有 GIL 的 GC / 解释器退出阶段，此时 `block_on(stop())`
     /// 会与 tokio 后台任务互锁导致进程卡死。
-    /// 因此仅后台关闭 runtime 终止线程；需要优雅停止请显式调用 `stop()`。
+    /// 因此只取出 runtime 并后台关闭（立即返回，不等待任务）；
+    /// 需要优雅停止请显式调用 `stop()`。
     fn drop(&mut self) {
-        self.runtime.shutdown_background();
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
     }
 }
 

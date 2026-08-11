@@ -44,7 +44,10 @@ def make_node(name: str, listener: str, peer: Optional[str] = None) -> "easytier
     config = {
         "instance_name": name,
         "network_identity": NET,
-        "flags": {"no_tun": True},  # 测试中不创建 TUN 设备，避免管理员权限
+        # no_tun：不创建 TUN 设备（测试无需管理员权限）。
+        # bind_device: False：no_tun 下禁用把客户端 socket 绑定到虚拟 IP，
+        # 否则 Windows 上连接会报 WSAEADDRNOTAVAIL(10049)。
+        "flags": {"no_tun": True, "bind_device": False},
     }
     if listener:
         config["listeners"] = [listener]
