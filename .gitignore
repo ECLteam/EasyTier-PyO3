@@ -17,3 +17,9 @@ build/
 
 # 本机工具链配置（含机器相关绝对路径，参考 .cargo/config.toml.example）
 /.cargo/config.toml
+
+# IDE（IntelliJ / RustRover）
+.idea/
+
+# macOS
+.DS_Store

@@ -1,10 +1,15 @@
 # EasyTier-PyO3
 
+[![License: LGPL-3.0](https://img.shields.io/badge/License-LGPL--3.0-blue.svg)](LICENSE)
+
 使用 [PyO3](https://pyo3.rs) 编写的 [EasyTier](https://github.com/EasyTier/EasyTier)
 (易梯, 开源 mesh P2P VPN) Python 绑定库。
 
 可以在 Python 中直接创建、启动、管理 EasyTier 节点，查询对端/路由/指标快照，
 管理接入凭证，以及订阅节点事件。
+
+> 本项目以 **LGPL-3.0** 发布（与 easytier 一致），详见 [LICENSE](LICENSE) 与
+> [NOTICE](NOTICE)。
 
 ```python
 from easytier_py import Node
