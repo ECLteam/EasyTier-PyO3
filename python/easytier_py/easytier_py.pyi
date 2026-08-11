@@ -21,6 +21,9 @@ class Node:
     用 TOML 字符串或 dict 创建（字段与 easytier-core 配置文件一致）。
     用完请显式调用 stop() 以优雅停止；对象被回收时仅在后台关闭其运行时，
     不保证清理 TUN 等系统资源。
+
+    线程安全：所有方法均可在多个 Python 线程中并发调用（内部线程安全，
+    不会出现 "Already mutably borrowed"）。
     """
 
     def __init__(self, config: Config) -> None:

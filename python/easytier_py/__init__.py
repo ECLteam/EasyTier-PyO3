@@ -5,8 +5,9 @@
 - 顺带携带运行时 DLL（wintun / Packet / WinDivert64）到安装目录
 """
 
+from . import easytier_py as _impl
 from .easytier_py import *  # noqa: F401,F403
 from .easytier_py import __doc__  # noqa: F401
 
-if hasattr(easytier_py, "__all__"):  # noqa: F405
-    __all__ = easytier_py.__all__  # noqa: F405
+if hasattr(_impl, "__all__"):
+    __all__ = _impl.__all__

@@ -196,7 +196,9 @@ struct Node {
     /// 用 `Option` 包裹，便于在 `Drop` 中取出所有权做后台关闭。
     runtime: Option<tokio::runtime::Runtime>,
     /// 节点事件总线订阅者，用于 `events()` / `next_event()`。
-    event_rx: Option<tokio::sync::broadcast::Receiver<GlobalCtxEvent>>,
+    /// 用 `Mutex` 包裹：保证这两个方法能用 `&self` 安全地取出/放回订阅者，
+    /// 从而允许从多个 Python 线程并发调用节点方法（共享借用互不冲突）。
+    event_rx: std::sync::Mutex<Option<tokio::sync::broadcast::Receiver<GlobalCtxEvent>>>,
 }
 
 impl Node {
@@ -236,14 +238,14 @@ impl Node {
         Ok(Self {
             instance,
             runtime: Some(runtime),
-            event_rx,
+            event_rx: std::sync::Mutex::new(event_rx),
         })
     }
 
     // ---------- 生命周期 ----------
 
     /// 启动节点，阻塞直到启动完成；失败时抛出 `RuntimeError`。
-    fn start(&mut self, py: Python<'_>) -> PyResult<()> {
+    fn start(&self, py: Python<'_>) -> PyResult<()> {
         run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.start().await
         })?
@@ -251,14 +253,14 @@ impl Node {
     }
 
     /// 停止节点（幂等）。
-    fn stop(&mut self, py: Python<'_>) -> PyResult<()> {
+    fn stop(&self, py: Python<'_>) -> PyResult<()> {
         run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.stop().await;
         })
     }
 
     /// 阻塞直到节点停止。
-    fn wait(&mut self, py: Python<'_>) -> PyResult<()> {
+    fn wait(&self, py: Python<'_>) -> PyResult<()> {
         run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.wait().await;
         })
@@ -549,7 +551,14 @@ impl Node {
     // ---------- 凭证管理（需要 admin 节点） ----------
 
     /// 生成一个接入凭证，返回 `{"credential_id", "secret", "expiry_unix", "changed"}`。
-    #[pyo3(signature = (groups, allowed_proxy_cidrs, allow_relay=false, ttl_seconds=3600.0, credential_id=None, reusable=true))]
+    #[pyo3(signature = (
+        groups,
+        allowed_proxy_cidrs,
+        allow_relay = false,
+        ttl_seconds = 3600.0,
+        credential_id = None,
+        reusable = true,
+    ))]
     fn generate_credential(
         &self,
         py: Python<'_>,
@@ -633,7 +642,7 @@ impl Node {
     // ---------- 其它运行时操作 ----------
 
     /// 关闭与指定对端的一条连接（conn_id 为 UUID 字符串）。
-    fn close_peer_conn(&mut self, py: Python<'_>, peer_id: u32, conn_id: &str) -> PyResult<()> {
+    fn close_peer_conn(&self, py: Python<'_>, peer_id: u32, conn_id: &str) -> PyResult<()> {
         let conn_id = uuid::Uuid::parse_str(conn_id)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let result = run_blocking(
@@ -647,7 +656,7 @@ impl Node {
     }
 
     /// 运行时更新出口节点列表（IP 字符串列表）。
-    fn update_exit_nodes(&mut self, py: Python<'_>, ips: Vec<String>) -> PyResult<()> {
+    fn update_exit_nodes(&self, py: Python<'_>, ips: Vec<String>) -> PyResult<()> {
         let ips = ips
             .into_iter()
             .map(|s| {
@@ -661,7 +670,7 @@ impl Node {
     }
 
     /// 刷新 ACL 组（读取路由信息后重新计算）。
-    fn refresh_acl_groups(&mut self, py: Python<'_>) -> PyResult<()> {
+    fn refresh_acl_groups(&self, py: Python<'_>) -> PyResult<()> {
         run_blocking(py, &self.instance, &self.handle(), |i| async move {
             i.refresh_acl_groups().await;
         })
@@ -670,15 +679,17 @@ impl Node {
     // ---------- 事件订阅 ----------
 
     /// 取出当前所有待处理事件（不阻塞），返回事件 dict 列表。
-    fn events(&mut self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
-        let mut rx = self
-            .event_rx
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("事件订阅不可用"))?;
-        let mut out = Vec::new();
+    fn events(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        let mut guard = self.event_rx.lock().unwrap();
+        let Some(mut rx) = guard.take() else {
+            return Err(PyRuntimeError::new_err("事件订阅不可用"));
+        };
+        // 先只取原始事件，放回 receiver 后再做序列化，
+        // 这样即使某个事件序列化失败，订阅也不会丢失。
+        let mut raw = Vec::new();
         loop {
             match rx.try_recv() {
-                Ok(ev) => out.push(serde_to_py(py, ev)?),
+                Ok(ev) => raw.push(ev),
                 Err(
                     tokio::sync::broadcast::error::TryRecvError::Empty
                     | tokio::sync::broadcast::error::TryRecvError::Lagged(_)
@@ -686,16 +697,20 @@ impl Node {
                 ) => break,
             }
         }
-        self.event_rx = Some(rx);
-        Ok(out)
+        *guard = Some(rx);
+        drop(guard);
+        raw.into_iter().map(|ev| serde_to_py(py, ev)).collect()
     }
 
     /// 阻塞等待下一个事件；给定 `timeout`（秒）超时后仍无事件则返回 None。
-    fn next_event(&mut self, py: Python<'_>, timeout: Option<f64>) -> PyResult<Option<Py<PyAny>>> {
-        let mut rx = self
-            .event_rx
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("事件订阅不可用"))?;
+    fn next_event(&self, py: Python<'_>, timeout: Option<f64>) -> PyResult<Option<Py<PyAny>>> {
+        let mut rx = {
+            let mut guard = self.event_rx.lock().unwrap();
+            match guard.take() {
+                Some(rx) => rx,
+                None => return Err(PyRuntimeError::new_err("事件订阅不可用")),
+            }
+        };
         let handle = self.handle();
         // 阻塞等待事件时释放 GIL；同时把 receiver 一并返回，避免丢失订阅。
         // 注意：tokio::time::timeout 必须在 runtime 上下文内构造，
@@ -716,7 +731,7 @@ impl Node {
             };
             (result, rx)
         });
-        self.event_rx = Some(rx);
+        *self.event_rx.lock().unwrap() = Some(rx);
         match event? {
             Some(ev) => Ok(Some(serde_to_py(py, ev)?)),
             None => Ok(None),

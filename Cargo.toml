@@ -2,6 +2,8 @@
 name = "EasyTier-PyO3"
 version = "0.1.0"
 edition = "2024"
+description = "Python bindings for EasyTier mesh VPN core (PyO3)"
+license = "Apache-2.0"
 
 [lib]
 name = "easytier_py"

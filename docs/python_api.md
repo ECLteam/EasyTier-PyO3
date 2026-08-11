@@ -55,6 +55,10 @@ Node(config: Union[str, dict])
 优雅停止并释放资源；节点被垃圾回收时只会在后台关闭其运行时（不阻塞、不保证清理
 TUN 等资源），因此**用完务必调用 `stop()`**。
 
+> **线程安全**：`Node` 的所有方法都可在多个 Python 线程中并发调用
+> （内部通过锁保护可变状态，不会抛 `Already mutably borrowed`），
+> 适合"后台线程等事件 + 主线程查询"的用法。
+
 ```python
 from easytier_py import Node
 
@@ -500,12 +504,14 @@ from easytier_py import Node
 import time
 
 net = {"network_name": "demo", "network_secret": "demo-secret"}
+# no_tun 模式下必须 bind_device=False，否则 Windows 连接报 10049。
+flags = {"no_tun": True, "bind_device": False}
 
 # 节点 A 监听 11010
 a = Node({
     "instance_name": "a",
     "network_identity": net,
-    "flags": {"no_tun": True},
+    "flags": flags,
     "listeners": ["tcp://127.0.0.1:11010"],
 })
 a.start()
@@ -514,7 +520,7 @@ a.start()
 b = Node({
     "instance_name": "b",
     "network_identity": net,
-    "flags": {"no_tun": True},
+    "flags": flags,
     "peer": [{"uri": "tcp://127.0.0.1:11010"}],
 })
 b.start()
@@ -542,7 +548,7 @@ import threading, time
 
 node = Node({
     "network_identity": {"network_name": "evt", "network_secret": "evt"},
-    "flags": {"no_tun": True},
+    "flags": {"no_tun": True, "bind_device": False},
     "listeners": ["tcp://127.0.0.1:11012"],
 })
 

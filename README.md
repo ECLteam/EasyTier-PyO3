@@ -152,12 +152,14 @@ node_b.start()
 
 ### 不创建 TUN 设备（无管理员权限测试）
 
-Windows 上创建 TUN 设备需要管理员权限；仅做连通性/对端发现测试时可关闭：
+Windows 上创建 TUN 设备需要管理员权限；仅做连通性/对端发现测试时可关闭。
+注意 `no_tun` 模式下必须同时设置 `bind_device = false`，否则客户端 socket
+尝试绑定到虚拟 IP 会报 WSAEADDRNOTAVAIL(10049)：
 
 ```python
 node = Node({
     "network_identity": {"network_name": "test", "network_secret": "test"},
-    "flags": {"no_tun": True},
+    "flags": {"no_tun": True, "bind_device": False},
 })
 ```
 
@@ -205,6 +207,7 @@ node.remove_connector("tcp://10.0.0.5:11010")
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `no_tun` | false | 不创建 TUN 设备 |
+| `bind_device` | true | 把 socket 绑定到虚拟 IP；`no_tun` 模式下请设为 false，否则 Windows 连接会报 WSAEADDRNOTAVAIL |
 | `dev_name` | "" | TUN 设备名 |
 | `enable_ipv6` | true | 启用 IPv6 |
 | `mtu` | 1380 | MTU |

@@ -11,11 +11,13 @@
     4. 单机双节点对端发现 (no_tun, 无需管理员权限)
     5. 事件订阅 (events / next_event)
     6. 快照与统计 (peers / node_info / dump_route / metrics / acl_whitelist)
+    7. 多线程并发访问 (后台线程等事件 + 主线程查询)
 
 无需 pytest，直接运行即可；任一项失败时退出码为 1。
 """
 
 import sys
+import threading
 import time
 from typing import Optional
 
@@ -103,28 +105,30 @@ def test_two_nodes() -> None:
     print("[4] 单机双节点对端发现")
     a = make_node("peer-a", "tcp://127.0.0.1:11030")
     b = make_node("peer-b", "", peer="tcp://127.0.0.1:11030")
-    a.start()
-    b.start()
+    try:
+        a.start()
+        b.start()
 
-    deadline = time.time() + 15
-    discovered = False
-    while time.time() < deadline:
-        if b.peers():
-            discovered = True
-            break
-        time.sleep(0.5)
+        deadline = time.time() + 15
+        discovered = False
+        while time.time() < deadline:
+            if b.peers():
+                discovered = True
+                break
+            time.sleep(0.5)
 
-    check("B 发现对端 A", discovered, f"peers={b.peers()}")
-    if discovered:
-        first = b.peers()[0]
-        check("peers 条目含 peer_id", "peer_id" in first, str(first))
-    check("dump_route() 非空", bool(b.dump_route()))
-    check("node_info() 返回 dict", isinstance(b.node_info(), dict))
-    check("routes() 返回列表", isinstance(b.routes(), list))
-
-    a.stop()
-    b.stop()
-    check("stop() 幂等", a.stop() is None)
+        check("B 发现对端 A", discovered, f"peers={b.peers()}")
+        if discovered:
+            first = b.peers()[0]
+            check("peers 条目含 peer_id", "peer_id" in first, str(first))
+        check("dump_route() 非空", bool(b.dump_route()))
+        check("node_info() 返回 dict", isinstance(b.node_info(), dict))
+        check("routes() 返回列表", isinstance(b.routes(), list))
+    finally:
+        # 无论断言是否失败都停掉两个节点，避免残留。
+        a.stop()
+        b.stop()
+        check("stop() 幂等", a.stop() is None)
 
 
 def test_events(node: "easytier_py.Node") -> None:
@@ -135,6 +139,39 @@ def test_events(node: "easytier_py.Node") -> None:
 
     got = node.next_event(timeout=0.5)
     check("next_event() 返回 dict 或 None", got is None or isinstance(got, dict), repr(got))
+
+
+def test_concurrent_access() -> None:
+    print("[7] 多线程并发访问")
+    # 回归用例：后台线程阻塞等事件时，主线程仍可调用节点方法
+    # （曾出现 RuntimeError: Already mutably borrowed）。
+    node = make_node("conc-a", "tcp://127.0.0.1:11050")
+    node.start()
+
+    results = []
+    stop_flag = threading.Event()
+
+    def waiter() -> None:
+        while not stop_flag.is_set():
+            try:
+                node.next_event(timeout=0.2)
+            except Exception as exc:  # noqa: BLE001
+                results.append(f"next_event 异常: {exc!r}")
+                return
+
+    t = threading.Thread(target=waiter, daemon=True)
+    t.start()
+    try:
+        for _ in range(10):
+            node.peers()
+            node.state()
+            time.sleep(0.05)
+    finally:
+        stop_flag.set()
+        t.join(timeout=2)
+        node.stop()
+
+    check("并发访问无异常", not results, str(results))
 
 
 def test_stats(node: "easytier_py.Node") -> None:
@@ -154,6 +191,7 @@ def main() -> None:
         test_two_nodes()
         test_events(node)
         test_stats(node)
+        test_concurrent_access()
     except Exception as exc:  # noqa: BLE001 - 测试脚本要兜底打印
         global _failed
         _failed += 1
