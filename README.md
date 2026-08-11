@@ -207,7 +207,7 @@ node.remove_connector("tcp://10.0.0.5:11010")
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `no_tun` | false | 不创建 TUN 设备 |
-| `bind_device` | true | 把 socket 绑定到虚拟 IP；`no_tun` 模式下请设为 false，否则 Windows 连接会报 WSAEADDRNOTAVAIL |
+| `bind_device` | true | 把隧道 socket 绑定到虚拟 IP；同机回环测试（或连接报 WSAEADDRNOTAVAIL/10049 时）请设为 false |
 | `dev_name` | "" | TUN 设备名 |
 | `enable_ipv6` | true | 启用 IPv6 |
 | `mtu` | 1380 | MTU |
@@ -318,6 +318,11 @@ easytier 的构建脚本给 `Packet.lib` 输出了相对链接路径，作为依
 `Packet.lib`，并由 `build.rs` 输出绝对链接路径解决，无需手动处理。
 
 **Q9：安装后创建 TUN 设备失败 / 提示找不到 wintun.dll？**
-`third_party/x86_64/` 内置了 `wintun.dll`、`Packet.dll`、`WinDivert64.sys`。
-需要把它们放到 `easytier_py.pyd` 同目录（即 site-packages 下）才能使用
-TUN / WinDivert 功能。仅做 `no_tun` 的连通性测试则无需这些 DLL。
+`python/easytier_py/` 里随包分发了 `wintun.dll`、`Packet.dll`、`WinDivert64.sys`。
+模块导入时会把 pyd 所在目录加入进程 DLL 搜索路径（`AddDllDirectory`），
+因此随包安装的 `wintun.dll` 能被 easytier 自动找到，无需手动放置。
+仅做 `no_tun` 的连通性测试则不需要这些 DLL。
+
+> TUN 已在 Windows 上实测通过（需管理员权限）：双节点建链后，
+> 用 `tests/test_tun_manual.py` 可验证 TUN 数据面（ping 经隧道可达）。
+> 同机回环测试时节点需设 `bind_device: False`，否则连接报 WSAEADDRNOTAVAIL。

@@ -771,9 +771,42 @@ fn version() -> String {
     easytier::VERSION.to_string()
 }
 
+/// 仅 Windows：把 pyd 所在目录加入进程 DLL 搜索路径。
+///
+/// easytier 内部用 `LoadLibraryW("wintun.dll")` 加载 wintun 驱动库，其默认搜索
+/// 范围不含 pyd 所在目录，导致找不到随包分发的 wintun.dll（rust-tun 的
+/// `get_dll_absolute_path` 在加载失败时还会回落到 python.exe 路径，误报
+/// `Signer "Python Software Foundation" not match "WireGuard LLC"`）。
+/// 这里在模块导入时把本模块目录加入搜索路径，让 wintun.dll 能被正确加载。
+#[cfg(windows)]
+fn register_pyd_dll_search_dir(m: &Bound<'_, PyModule>) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::System::LibraryLoader::{
+        AddDllDirectory, SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+        LOAD_LIBRARY_SEARCH_USER_DIRS,
+    };
+
+    let Ok(file) = m.filename() else { return };
+    let Ok(file) = file.to_str() else { return };
+    let Some(dir) = std::path::Path::new(file).parent() else { return };
+    let Some(dir) = dir.to_str() else { return };
+
+    unsafe {
+        // 启用默认目录 + 用户目录参与 DLL 搜索，并把 pyd 所在目录加入。
+        SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS);
+        let wide: Vec<u16> = std::ffi::OsStr::new(dir)
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        AddDllDirectory(wide.as_ptr());
+    }
+}
+
 /// 注册为 Python 模块 `easytier_py`。
 #[pymodule]
 fn easytier_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    #[cfg(windows)]
+    register_pyd_dll_search_dir(m);
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_class::<Node>()?;
     Ok(())
