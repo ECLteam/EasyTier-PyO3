@@ -11,8 +11,12 @@ GNU LGPL-3.0 许可证发布，详见 LICENSE。
     或再分发，请遵循 LGPL-3.0（提供源码、保留声明、保证可再链接）。
 
 随 wheel 分发的第三方二进制（来自 easytier 上游 third_party，各自持有独立许可证）：
-  - wintun.dll        —— WireGuard LLC / wintun.net（TUN 驱动库）
-  - Packet.dll/.lib   —— Npcap SDK（数据包捕获导入库）
-  - WinDivert64.sys   —— WinDivert（GPL-2.0，仅运行时按需加载，不参与链接）
+  - wintun.dll        —— WireGuard LLC / wintun.net（TUN 驱动库；x86_64 与 arm64 两版）
+  - Packet.dll/.lib   —— Npcap SDK（数据包捕获导入库；x86_64 与 arm64 两版）
+  - WinDivert64.sys   —— WinDivert（GPL-2.0，仅 Windows x86_64；按需加载，不参与链接）
+
+> 注意：Windows ARM64 的 WinDivert 不支持（easytier 上游发行包内的
+> `WinDivert64.sys` 实为占位文件，提示 "WinDivert doesn't support aarch64"），
+> 因此 ARM64 构建不包含 WinDivert 功能，以基础 TCP/UDP 隧道为主。
 
 使用本项目前请阅读并遵守以上组件的各自许可证条款。

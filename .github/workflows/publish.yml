@@ -23,11 +23,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: windows-latest
+            arch: x86_64
+          - os: macos-13
+            arch: x86_64
+          - os: macos-14
+            arch: arm64
+          # Windows ARM64：实验性（GitHub-hosted windows-11-arm preview runner）
+          - os: windows-11-arm
+            arch: arm64
+
     steps:
       - uses: actions/checkout@v4
 
-      # ---- Windows: 安装 protoc（使用官方 zip）----
+      # ---- Windows: 安装 protoc（使用官方 zip，arm64 靠 x64 模拟运行 win64 版）----
       - name: Install protoc (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -38,9 +50,9 @@ jobs:
           Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
           "PROTOC=$env:TEMP\protoc\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang）----
+      # ---- Windows x64: 缓存并安装 LLVM（bindgen 需要 libclang；choco 仅 x64）----
       - name: Cache LLVM (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.arch == 'x86_64'
         uses: actions/cache@v4
         id: cache-llvm
         with:
@@ -49,21 +61,20 @@ jobs:
           restore-keys: llvm-windows-
 
       - name: Install LLVM (Windows)
-        if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
+        if: runner.os == 'Windows' && matrix.arch == 'x86_64' && steps.cache-llvm.outputs.cache-hit != 'true'
         run: choco install llvm -y --no-progress
+
+      # ---- Windows ARM64: winget 装 LLVM（choco 在 arm64 runner 上可能不可用）----
+      - name: Install LLVM (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.arch == 'arm64' && runner.arch == 'ARM64'
+        shell: pwsh
+        run: winget install LLVM.LLVM --accept-package-agreements --accept-source-agreements --silent
 
       - name: Set LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
 
-      # macOS: bindgen(pnet_sys) 需要 libclang，指向 Xcode 工具链自带的 libclang.dylib
-      - name: Set LIBCLANG_PATH (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          clang_dir=$(dirname "$(xcrun --find clang)")
-          echo "LIBCLANG_PATH=${clang_dir}/../lib" >> $GITHUB_ENV
-
-      # ---- macOS: 安装 protoc（使用官方 zip）----
+      # ---- macOS: 安装 protoc（使用官方 zip，arm64 用 osx-aarch_64）----
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -72,6 +83,13 @@ jobs:
           curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${protoc_arch}.zip" -o /tmp/protoc.zip
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           sudo chmod +x /usr/local/bin/protoc
+
+      # macOS: bindgen(pnet_sys) 需要 libclang，指向 Xcode 工具链自带的 libclang.dylib
+      - name: Set LIBCLANG_PATH (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          clang_dir=$(dirname "$(xcrun --find clang)")
+          echo "LIBCLANG_PATH=${clang_dir}/../lib" >> $GITHUB_ENV
 
       # ---- Linux: 无需在宿主机安装 protoc（容器内会装）----
       # （移除原先的 apt-get 安装）
@@ -111,6 +129,13 @@ jobs:
             # bindgen（pnet_sys）需要 libclang；pnet_datalink 需要 libpcap 头文件
             dnf install -y clang libpcap-devel || yum install -y clang libpcap-devel
           docker-options: --env LIBCLANG_PATH=/usr/lib64
+
+      # ---- Windows ARM64: 用 aarch64 的运行时 DLL 替换 python 包内默认（x64）DLL ----
+      - name: Stage ARM64 runtime DLLs (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.arch == 'arm64'
+        shell: bash
+        run: |
+          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
 
       # ---- 上传 wheel 构件 ----
       - name: Upload wheels

@@ -20,12 +20,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: windows-latest
+            arch: x86_64
+          - os: macos-13
+            arch: x86_64
+          - os: macos-14
+            arch: arm64
+          # Windows ARM64：GitHub-hosted 自托管 preview runner
+          - os: windows-11-arm
+            arch: arm64
 
     steps:
       - uses: actions/checkout@v4
 
-      # ---- 安装 protoc（非 Linux，Linux 在 manylinux 容器内安装） ----
+      # ---- 安装 protoc（Linux 在 manylinux 容器内安装） ----
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -40,14 +51,15 @@ jobs:
         shell: pwsh
         run: |
           # 保留官方 zip 的 include/（google/protobuf/*.proto），否则 protoc 报 File not found
+          # protoc 官方无独立的 win-arm64 版；arm64 Windows runner 通过 x64 模拟运行 win64 版。
           $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
           Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
           Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
           "PROTOC=$env:TEMP\protoc\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang） ----
+      # ---- Windows x64: 缓存并安装 LLVM（bindgen 需要 libclang；choco 仅 x64）----
       - name: Cache LLVM (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.arch == 'x86_64'
         uses: actions/cache@v4
         id: cache-llvm
         with:
@@ -57,8 +69,14 @@ jobs:
             llvm-windows-
 
       - name: Install LLVM (Windows)
-        if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
+        if: runner.os == 'Windows' && matrix.arch == 'x86_64' && steps.cache-llvm.outputs.cache-hit != 'true'
         run: choco install llvm -y --no-progress
+
+      # ---- Windows ARM64: winget 装 LLVM（choco 在 arm64 runner 上可能不可用）----
+      - name: Install LLVM (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.arch == 'arm64' && runner.arch == 'ARM64'
+        shell: pwsh
+        run: winget install LLVM.LLVM --accept-package-agreements --accept-source-agreements --silent
 
       - name: Set LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
@@ -106,6 +124,13 @@ jobs:
             # bindgen（pnet_sys）需要 libclang；pnet_datalink 需要 libpcap 头文件
             dnf install -y clang libpcap-devel || yum install -y clang libpcap-devel
           docker-options: --env LIBCLANG_PATH=/usr/lib64
+
+      # ---- Windows ARM64: 用 aarch64 的运行时 DLL 替换 python 包内默认（x64）DLL ----
+      - name: Stage ARM64 runtime DLLs (Windows ARM64)
+        if: runner.os == 'Windows' && matrix.arch == 'arm64'
+        shell: bash
+        run: |
+          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
 
       # ---- 安装匹配当前 CPython 的 wheel 并运行自测（maturin 无 test 子命令）----
       # 注意：dist/ 下是全部 CPython 版本的 wheel，不能一起 pip install，
