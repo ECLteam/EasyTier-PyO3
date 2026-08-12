@@ -8,12 +8,11 @@
 //! 解决办法：把 `Packet.lib` 拷贝到本项目的 `third_party/x86_64/` 下，
 //! 这里输出绝对路径的链接搜索目录。上游那个无效的相对路径会被链接器忽略。
 
-use std::path::PathBuf;
-
 fn main() {
     // 仅 Windows 需要链接 pnet 的 Packet.lib；其它平台无此问题。
     #[cfg(target_os = "windows")]
     {
+        use std::path::PathBuf;
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let link_dir = manifest_dir.join("third_party").join("x86_64");
         println!("cargo:rustc-link-search=native={}", link_dir.display());

@@ -13,6 +13,8 @@ env:
   PROTOC_VERSION: 25.3                       # 统一 protoc 版本
   # macOS runner 网络经代理时拦截 TLS（自签名证书），让 Node.js 使用系统 CA
   NODE_OPTIONS: --use-system-ca
+  # 让 cargo 用系统 git 拉取 git 依赖（libgit2 在 macOS 上不信自签 CA 会失败）
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   build:
@@ -53,6 +55,13 @@ jobs:
       - name: Set LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+      # macOS: bindgen(pnet_sys) 需要 libclang，指向 Xcode 工具链自带的 libclang.dylib
+      - name: Set LIBCLANG_PATH (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          clang_dir=$(dirname "$(xcrun --find clang)")
+          echo "LIBCLANG_PATH=${clang_dir}/../lib" >> $GITHUB_ENV
 
       # ---- macOS: 安装 protoc（使用官方 zip）----
       - name: Install protoc (macOS)
