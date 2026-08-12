@@ -65,12 +65,10 @@ jobs:
       # ---- Linux: 无需在宿主机安装 protoc（容器内会装）----
       # （移除原先的 apt-get 安装）
 
-      # ---- Python 多版本 ----
+      # ---- Python 多版本：3.11+（Windows arm64 无 3.9/3.10 官方构建，全平台统一）----
       - uses: actions/setup-python@v5
         with:
           python-version: |
-            3.9
-            3.10
             3.11
             3.12
             3.13
