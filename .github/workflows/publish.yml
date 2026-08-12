@@ -1,0 +1,144 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROTOC_VERSION: 25.3                       # 统一 protoc 版本
+
+jobs:
+  build:
+    name: Build wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Windows: 安装 protoc（使用官方 zip）----
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc"
+          Move-Item -Path "$env:TEMP\protoc\bin\protoc.exe" -Destination "$env:TEMP\protoc.exe" -Force
+          echo "$env:TEMP" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang）----
+      - name: Cache LLVM (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        id: cache-llvm
+        with:
+          path: C:\Program Files\LLVM
+          key: llvm-windows-${{ hashFiles('.llvm-version') }}   # 可在仓库根目录创建 .llvm-version 文件来更新缓存
+          restore-keys: llvm-windows-
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
+        run: choco install llvm -y --no-progress
+
+      - name: Set LIBCLANG_PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+      # ---- macOS: 安装 protoc（使用官方 zip）----
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -fsSL https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-osx-x86_64.zip -o /tmp/protoc.zip
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+
+      # ---- Linux: 无需在宿主机安装 protoc（容器内会装）----
+      # （移除原先的 apt-get 安装）
+
+      # ---- Python 多版本 ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.9
+            3.10
+            3.11
+            3.12
+            3.13
+
+      # ---- 缓存 Cargo 依赖 ----
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # ---- 构建 wheel（manylinux 容器内安装 protoc）----
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist --find-interpreter   # 去掉 --compatibility pypi（默认就是）
+          manylinux: 2_28
+          sccache: true
+          before-script-linux: |
+            # manylinux 容器内安装 protoc（固定版本）
+            curl -fsSL https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-linux-x86_64.zip -o /tmp/protoc.zip
+            unzip -o /tmp/protoc.zip -d /usr/local
+            chmod +x /usr/local/bin/protoc
+
+      # ---- 上传 wheel 构件 ----
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist
+
+  sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sdist
+        run: |
+          python -m pip install --upgrade pip maturin
+          maturin sdist --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+  publish:
+    name: Publish to PyPI
+    needs: [build, sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # ---- 校验构件（可选但推荐）----
+      - name: Check wheels and sdist with twine
+        run: |
+          python -m pip install --upgrade twine
+          twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

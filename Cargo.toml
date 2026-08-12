@@ -18,7 +18,7 @@ url = "2"
 uuid = "1"
 serde = "1"
 serde_json = "1"
-toml = "0.8"
+toml = "1"
 # prost-wkt-types 默认构建需要系统 protoc 命令；启用 vendored-protox 改用纯 Rust
 # 的 protox 编译，避免在未安装 protoc 的环境下构建失败。
 prost-wkt-types = { version = "0.7", features = ["vendored-protox"] }
@@ -26,4 +26,4 @@ prost-wkt-types = { version = "0.7", features = ["vendored-protox"] }
 [target.'cfg(windows)'.dependencies]
 # 仅 Windows：把 pyd 所在目录加入进程 DLL 搜索路径，让 easytier 能找到随包分发的
 # wintun.dll（见 src/lib.rs 的 register_pyd_dll_search_dir）。
-windows-sys = { version = "0.59", features = ["Win32_System_LibraryLoader"] }
+windows-sys = { version = "0.61", features = ["Win32_System_LibraryLoader"] }

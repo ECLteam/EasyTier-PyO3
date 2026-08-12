@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PROTOC_VERSION: 25.3                        # 统一 protoc 版本
+
+jobs:
+  test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- 安装 protoc（非 Linux，Linux 在 manylinux 容器内安装） ----
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -fsSL https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-osx-x86_64.zip -o /tmp/protoc.zip
+          sudo unzip -o /tmp/protoc.zip -d /usr/local
+          sudo chmod +x /usr/local/bin/protoc
+
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc"
+          Move-Item -Path "$env:TEMP\protoc\bin\protoc.exe" -Destination "$env:TEMP\protoc.exe" -Force
+          echo "$env:TEMP" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang） ----
+      - name: Cache LLVM (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        id: cache-llvm
+        with:
+          path: C:\Program Files\LLVM
+          key: llvm-windows-${{ hashFiles('.llvm-version') }}   # 可自行在仓库根目录创建 .llvm-version 文件来更新缓存
+          restore-keys: |
+            llvm-windows-
+
+      - name: Install LLVM (Windows)
+        if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
+        run: choco install llvm -y --no-progress
+
+      - name: Set LIBCLANG_PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
+
+      # ---- Python 多版本 ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.9
+            3.10
+            3.11
+            3.12
+            3.13
+
+      # ---- 缓存 cargo 依赖 ----
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # ---- 构建 wheel（一次构建所有 Python 版本） ----
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist --find-interpreter
+          manylinux: 2_28
+          sccache: true
+          before-script-linux: |
+            # manylinux 容器内安装 protoc
+            curl -fsSL https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-linux-x86_64.zip -o /tmp/protoc.zip
+            unzip -o /tmp/protoc.zip -d /usr/local
+            chmod +x /usr/local/bin/protoc
+
+      # ---- 使用 maturin test 自动在所有 Python 版本上运行测试 ----
+      - name: Test wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: test
+          args: --release --test "python tests/test_easytier.py"
+
+      # ---- 上传构建产物 ----
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist
