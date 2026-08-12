@@ -22,5 +22,6 @@ classifiers = [
 bindings = "pyo3"
 module-name = "easytier_py"
 # python/ 下的 easytier_py 包随 wheel 一起安装，
-# 其中携带运行时 DLL（wintun.dll / Packet.dll / WinDivert64.sys）与类型存根。
+# 其中携带类型存根与运行时 DLL（wintun.dll / Packet.dll / WinDivert64.sys，
+# 由 build.rs 构建时从 third_party/<arch>/ 自动复制，见 build.rs）。
 python-source = "python"

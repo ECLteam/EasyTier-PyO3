@@ -135,9 +135,10 @@ CI（`.github/workflows/ci.yml` / `publish.yml`）会为每个平台构建 **3.1
 - `ci` 工作流：push / PR 时构建 + 测试，产物以 `wheels-<os>` 形式归档
   （可在 Actions 页面下载）
 - `publish` 工作流：打 `v*` tag 时构建并发布到 PyPI（Trusted Publishing）
-- Windows ARM64：使用 GitHub 托管的 `windows-11-arm` 预览 runner，
-  由 workflow 的 staging 步骤在构建前把 `third_party/arm64/` 的
-  `Packet.dll` / `wintun.dll` 替换进 python 包，随 wheel 分发
+- Windows：运行时 DLL（`wintun.dll` / `Packet.dll` / `WinDivert64.sys`）由
+  `build.rs` 在构建时按 target 架构从 `third_party/<arch>/` 复制到
+  `python/easytier_py/`，随 wheel 自动分发，无需手工 staging（arm64 构建不含
+  WinDivert64.sys，easytier 在 aarch64 上不支持 winfilter）
 
 ## 构建常见问题
 
@@ -175,6 +176,6 @@ easytier 的构建脚本给 `Packet.lib` 输出了相对链接路径，作为依
 `Packet.lib`，并由 `build.rs` 输出绝对链接路径解决，无需手动处理。
 
 **Q7：ARM64 wheel 安装后 `import easytier_py` 报 `not a valid Win32 application`？**
-wheel 里的运行时 DLL 与 Python 架构不匹配。CI 已把 `third_party/arm64/` 的
-`Packet.dll` / `wintun.dll` 在构建前替换进包，官方产物不会出现此问题；
-自行交叉构建时请确认替换了同架构 DLL。
+wheel 里的运行时 DLL 与 Python 架构不匹配。`build.rs` 会按 target 架构从
+`third_party/<arch>/`（x86_64/arm64 各有官方 DLL）自动复制进包，官方产物不会
+出现此问题；自行交叉构建时请确认 DLL 来源与 target 一致。

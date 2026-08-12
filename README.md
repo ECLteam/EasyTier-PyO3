@@ -223,7 +223,8 @@ print(event)
 `pip uninstall easytier-pyo3`。
 
 **Q3：安装后创建 TUN 设备失败 / 提示找不到 wintun.dll？**
-`python/easytier_py/` 里随包分发了 `wintun.dll`、`Packet.dll`、`WinDivert64.sys`。
+wheel 内随包分发 `wintun.dll`、`Packet.dll`、`WinDivert64.sys`（构建时由
+`build.rs` 从 `third_party/<arch>/` 自动复制进包，与 Python 架构一致）。
 模块导入时会把 pyd 所在目录加入进程 DLL 搜索路径（`AddDllDirectory`），
 因此随包安装的 `wintun.dll` 能被 easytier 自动找到，无需手动放置。
 仅做 `no_tun` 的连通性测试则不需要这些 DLL。

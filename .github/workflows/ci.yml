@@ -76,16 +76,9 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      # ---- Windows ARM64: 构建前先替换 python 包内 DLL（maturin 打包时
-      # python/easytier_py/ 内全部文件随 wheel 安装；若打包 x64 DLL，
-      # arm64 Python import 时报 "not a valid Win32 application"）----
-      - name: Stage ARM64 runtime DLLs (Windows ARM64)
-        if: runner.os == 'Windows' && runner.arch == 'ARM64'
-        shell: bash
-        run: |
-          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
-
-      # ---- 构建 wheel（一次构建所有 Python 版本） ----
+      # ---- 构建 wheel（一次构建所有 Python 版本）。
+      # Windows 的运行时 DLL 由 build.rs 按 target 架构从 third_party/<arch>/
+      # 复制到 python/easytier_py/，随 wheel 自动分发，无需额外 staging ----
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
