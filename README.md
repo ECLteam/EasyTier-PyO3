@@ -41,7 +41,7 @@ node.stop()
 
 ## 安装与构建
 
-直接安装（PyPI 发布后可用）：
+直接安装：
 
 ```bash
 pip install easytier-pyo3
