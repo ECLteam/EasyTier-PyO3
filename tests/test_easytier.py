@@ -21,6 +21,17 @@ import threading
 import time
 from typing import Optional
 
+# 脚本会打印中文：Windows 上若控制台是非中文代码页（如 CI 的 cp1252），
+# print 会抛 UnicodeEncodeError。中文代码页（GBK/cp936 等）保持不变，
+# 仅对英文代码页切到 UTF-8 输出（CI 日志按 UTF-8 收集）。
+_enc = (getattr(sys.stdout, "encoding", "") or "").lower()
+if _enc not in ("utf-8", "utf8", "gbk", "gb2312", "gb18030", "cp936", "big5", "cp950", "shift_jis", "shift-jis"):
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
 import easytier_py
 
 # 两个节点共用同一网络标识，才能互相发现。
