@@ -10,6 +10,8 @@ env:
   PROTOC_VERSION: 25.3                        # 统一 protoc 版本
   # macOS runner 网络经代理时拦截 TLS（自签名证书），让 Node.js 使用系统 CA
   NODE_OPTIONS: --use-system-ca
+  # 让 cargo 用系统 git 拉取 git 依赖（libgit2 在 macOS 上不信自签 CA 会失败）
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   test:
@@ -18,12 +20,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, windows-11-arm, ubuntu-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
 
-      # ---- 安装 protoc（非 Linux，Linux 在 manylinux 容器内安装） ----
+      # ---- 安装 protoc（Linux 在 manylinux 容器内安装） ----
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -38,36 +40,29 @@ jobs:
         shell: pwsh
         run: |
           # 保留官方 zip 的 include/（google/protobuf/*.proto），否则 protoc 报 File not found
+          # protoc 官方无独立的 win-arm64 版；arm64 Windows runner 通过 x64 模拟运行 win64 版。
           $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
           Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
           Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
           "PROTOC=$env:TEMP\protoc\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang） ----
-      - name: Cache LLVM (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/cache@v4
-        id: cache-llvm
-        with:
-          path: C:\Program Files\LLVM
-          key: llvm-windows-${{ hashFiles('.llvm-version') }}   # 可自行在仓库根目录创建 .llvm-version 文件来更新缓存
-          restore-keys: |
-            llvm-windows-
-
-      - name: Install LLVM (Windows)
-        if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
-        run: choco install llvm -y --no-progress
-
+      # ---- Windows: LLVM 已随 runner 镜像预装（windows-latest 与 windows-11-arm 均含，
+      # 原生支持 bindgen 需要的 libclang），无需安装步骤 ----
       - name: Set LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
 
-      # ---- Python 多版本 ----
+      # macOS: bindgen(pnet_sys) 需要 libclang，指向 Xcode 工具链自带的 libclang.dylib
+      - name: Set LIBCLANG_PATH (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          clang_dir=$(dirname "$(xcrun --find clang)")
+          echo "LIBCLANG_PATH=${clang_dir}/../lib" >> $GITHUB_ENV
+
+      # ---- Python 多版本：3.11+（Windows arm64 无 3.9/3.10 官方构建，全平台统一）----
       - uses: actions/setup-python@v5
         with:
           python-version: |
-            3.9
-            3.10
             3.11
             3.12
             3.13
@@ -80,6 +75,15 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+
+      # ---- Windows ARM64: 构建前先替换 python 包内 DLL（maturin 打包时
+      # python/easytier_py/ 内全部文件随 wheel 安装；若打包 x64 DLL，
+      # arm64 Python import 时报 "not a valid Win32 application"）----
+      - name: Stage ARM64 runtime DLLs (Windows ARM64)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: bash
+        run: |
+          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
 
       # ---- 构建 wheel（一次构建所有 Python 版本） ----
       - name: Build wheels
@@ -98,12 +102,15 @@ jobs:
             dnf install -y clang libpcap-devel || yum install -y clang libpcap-devel
           docker-options: --env LIBCLANG_PATH=/usr/lib64
 
-      # ---- 安装 wheel 并运行自测（maturin 无 test 子命令，直接装包跑）----
+      # ---- 安装匹配当前 CPython 的 wheel 并运行自测（maturin 无 test 子命令）----
+      # 注意：dist/ 下是全部 CPython 版本的 wheel，不能一起 pip install，
+      # 否则不匹配版本的 wheel 会报 "not a supported wheel"。
       - name: Install wheel & run tests
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install dist/*.whl
+          wheel=$(python -c "import glob,sys; v='cp%d%d'%(sys.version_info.major,sys.version_info.minor); print(next(w for w in glob.glob('dist/*.whl') if ('-%s-%s-'%(v,v)) in w))")
+          python -m pip install "$wheel"
           python tests/test_easytier.py
 
       # ---- 上传构建产物 ----

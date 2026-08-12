@@ -13,6 +13,8 @@ env:
   PROTOC_VERSION: 25.3                       # 统一 protoc 版本
   # macOS runner 网络经代理时拦截 TLS（自签名证书），让 Node.js 使用系统 CA
   NODE_OPTIONS: --use-system-ca
+  # 让 cargo 用系统 git 拉取 git 依赖（libgit2 在 macOS 上不信自签 CA 会失败）
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
 
 jobs:
   build:
@@ -21,11 +23,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [windows-latest, windows-11-arm, ubuntu-latest, macos-latest]
+
     steps:
       - uses: actions/checkout@v4
 
-      # ---- Windows: 安装 protoc（使用官方 zip）----
+      # ---- Windows: 安装 protoc（使用官方 zip，arm64 靠 x64 模拟运行 win64 版）----
       - name: Install protoc (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -36,25 +39,13 @@ jobs:
           Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
           "PROTOC=$env:TEMP\protoc\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang）----
-      - name: Cache LLVM (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/cache@v4
-        id: cache-llvm
-        with:
-          path: C:\Program Files\LLVM
-          key: llvm-windows-${{ hashFiles('.llvm-version') }}   # 可在仓库根目录创建 .llvm-version 文件来更新缓存
-          restore-keys: llvm-windows-
-
-      - name: Install LLVM (Windows)
-        if: runner.os == 'Windows' && steps.cache-llvm.outputs.cache-hit != 'true'
-        run: choco install llvm -y --no-progress
-
+      # ---- Windows: LLVM 已随 runner 镜像预装（windows-latest 与 windows-11-arm 均含，
+      # 原生支持 bindgen 需要的 libclang），无需安装步骤 ----
       - name: Set LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> $env:GITHUB_ENV
 
-      # ---- macOS: 安装 protoc（使用官方 zip）----
+      # ---- macOS: 安装 protoc（使用官方 zip，arm64 用 osx-aarch_64）----
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -64,15 +55,20 @@ jobs:
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           sudo chmod +x /usr/local/bin/protoc
 
+      # macOS: bindgen(pnet_sys) 需要 libclang，指向 Xcode 工具链自带的 libclang.dylib
+      - name: Set LIBCLANG_PATH (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          clang_dir=$(dirname "$(xcrun --find clang)")
+          echo "LIBCLANG_PATH=${clang_dir}/../lib" >> $GITHUB_ENV
+
       # ---- Linux: 无需在宿主机安装 protoc（容器内会装）----
       # （移除原先的 apt-get 安装）
 
-      # ---- Python 多版本 ----
+      # ---- Python 多版本：3.11+（Windows arm64 无 3.9/3.10 官方构建，全平台统一）----
       - uses: actions/setup-python@v5
         with:
           python-version: |
-            3.9
-            3.10
             3.11
             3.12
             3.13
@@ -85,6 +81,15 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
+
+      # ---- Windows ARM64: 构建前先替换 python 包内 DLL（maturin 打包时
+      # python/easytier_py/ 内全部文件随 wheel 安装；若打包 x64 DLL，
+      # arm64 Python import 时报 "not a valid Win32 application"）----
+      - name: Stage ARM64 runtime DLLs (Windows ARM64)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: bash
+        run: |
+          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
 
       # ---- 构建 wheel（manylinux 容器内安装 protoc）----
       - name: Build wheels

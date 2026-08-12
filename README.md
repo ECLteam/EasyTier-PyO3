@@ -66,6 +66,22 @@ node.stop()
 > `.cargo/config.toml`（已被 gitignore，参考 `.cargo/config.toml.example`），
 > 不影响其他平台/协作者。
 
+### 支持的平台 / 架构
+
+CI 会在以下平台构建并测试（见 `.github/workflows/ci.yml`）：
+
+| OS | 架构 | 说明 |
+| --- | --- | --- |
+| Linux | x86_64 | manylinux 2014 (glibc 2.17+) |
+| Windows | x86_64 | 完整功能（含 fake-tcp） |
+| Windows | ARM64 | **实验性**（GitHub-hosted `windows-11-arm`） |
+| macOS | x86_64 / arm64 | macOS 13 / 14 |
+
+> **关于 Windows ARM64**：easytier 官方在 aarch64 上**不支持 WinDivert**（其发行包内
+> `WinDivert64.sys` 为占位文件，文本提示 "WinDivert doesn't support aarch64"），因此
+> ARM64 构建以**基础 TCP/UDP 隧道**为主。ARM64 wheel 仍处于实验阶段，如有构建问题
+> 以 CI 实际情况为准。
+
 ### 2. 安装 Rust 工具链
 
 如果你还没有 Rust：
