@@ -7,7 +7,8 @@ name = "easytier-pyo3"
 version = "0.1.0"
 description = "Python bindings for EasyTier mesh VPN core (PyO3)"
 readme = "README.md"
-requires-python = ">=3.8"
+# 3.9/3.10 无 Windows ARM64 官方构建，全平台最低支持从 3.11 起（与 CI 构建产物对齐）
+requires-python = ">=3.11"
 license = "LGPL-3.0"
 classifiers = [
     "Programming Language :: Python :: 3",

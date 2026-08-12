@@ -2,9 +2,22 @@
 
 > 模块名：`easytier_py`
 > 版本：0.1.0
+> 支持 Python：3.11 / 3.12 / 3.13
 
 本文档覆盖该绑定库暴露给 Python 的全部接口。所有“耗时”操作（`start`、`stop`、
 各类快照查询等）都会在内部释放 GIL，不会阻塞其他 Python 线程。
+
+---
+
+## 安装
+
+PyPI 发布后直接安装：
+
+```bash
+pip install easytier-pyo3
+```
+
+源码构建 / 本地开发见 [构建指南](BUILDING.md)。
 
 ---
 
