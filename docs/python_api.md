@@ -11,7 +11,7 @@
 
 ## 安装
 
-PyPI 发布后直接安装：
+直接安装：
 
 ```bash
 pip install easytier-pyo3
