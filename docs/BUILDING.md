@@ -58,8 +58,7 @@ CI 会在以下平台构建并测试（见 `.github/workflows/ci.yml`）：
 
 > **关于 Windows ARM64**：easytier 官方在 aarch64 上**不支持 WinDivert**（其发行包内
 > `WinDivert64.sys` 为占位文件，文本提示 "WinDivert doesn't support aarch64"），因此
-> ARM64 构建以**基础 TCP/UDP 隧道**为主。ARM64 wheel 仍处于实验阶段，如有构建问题
-> 以 CI 实际情况为准。
+> ARM64 构建以**基础 TCP/UDP 隧道**为主。
 
 ## 安装 Rust 工具链
 
