@@ -25,3 +25,10 @@ module-name = "easytier_pyo3"
 # 其中携带类型存根与运行时 DLL（wintun.dll / Packet.dll / WinDivert64.sys，
 # 由 build.rs 构建时从 third_party/<arch>/ 自动复制，见 build.rs）。
 python-source = "python"
+# 运行时 DLL 由 build.rs 生成且被 .gitignore 忽略；maturin 默认不会打包
+# 被 gitignore 的文件，必须用 include 显式强制打进 wheel，否则安装后
+# import 扩展时因缺少 Packet.dll 报 "DLL load failed"（根因见 ADR）。
+include = [
+  { path = "easytier_pyo3/*.dll", format = "wheel" },
+  { path = "easytier_pyo3/*.sys", format = "wheel" },
+]
