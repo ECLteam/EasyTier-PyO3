@@ -82,6 +82,15 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # ---- Windows ARM64: 构建前先替换 python 包内 DLL（maturin 打包时
+      # python/easytier_py/ 内全部文件随 wheel 安装；若打包 x64 DLL，
+      # arm64 Python import 时报 "not a valid Win32 application"）----
+      - name: Stage ARM64 runtime DLLs (Windows ARM64)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: bash
+        run: |
+          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
+
       # ---- 构建 wheel（manylinux 容器内安装 protoc）----
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -98,13 +107,6 @@ jobs:
             # bindgen（pnet_sys）需要 libclang；pnet_datalink 需要 libpcap 头文件
             dnf install -y clang libpcap-devel || yum install -y clang libpcap-devel
           docker-options: --env LIBCLANG_PATH=/usr/lib64
-
-      # ---- Windows ARM64: 用 aarch64 的运行时 DLL 替换 python 包内默认（x64）DLL ----
-      - name: Stage ARM64 runtime DLLs (Windows ARM64)
-        if: runner.os == 'Windows' && runner.arch == 'ARM64'
-        shell: bash
-        run: |
-          cp third_party/arm64/Packet.dll third_party/arm64/wintun.dll python/easytier_py/
 
       # ---- 上传 wheel 构件 ----
       - name: Upload wheels
