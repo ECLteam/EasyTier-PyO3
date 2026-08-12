@@ -84,7 +84,7 @@ jobs:
 
       # ---- 构建 wheel（manylinux 容器内安装 protoc）。
       # Windows 的运行时 DLL 由 build.rs 按 target 架构从 third_party/<arch>/
-      # 复制到 python/easytier_py/，随 wheel 自动分发，无需额外 staging ----
+      # 复制到 python/easytier_pyo3/，随 wheel 自动分发，无需额外 staging ----
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:

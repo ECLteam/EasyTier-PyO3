@@ -3,23 +3,6 @@
 version = 4
 
 [[package]]
-name = "EasyTier-PyO3"
-version = "0.1.0"
-dependencies = [
- "easytier",
- "easytier-core",
- "prost-wkt-types",
- "pyo3",
- "serde",
- "serde_json",
- "tokio",
- "toml 1.1.4+spec-1.1.0",
- "url",
- "uuid",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1342,6 +1325,23 @@ dependencies = [
  "uuid",
  "x25519-dalek",
  "zip",
+]
+
+[[package]]
+name = "easytier-pyo3"
+version = "0.1.0"
+dependencies = [
+ "easytier",
+ "easytier-core",
+ "prost-wkt-types",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 1.1.4+spec-1.1.0",
+ "url",
+ "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

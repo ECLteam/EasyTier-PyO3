@@ -3,7 +3,7 @@
 //! 上游 easytier 的构建脚本（build/main.rs）为 Windows 下的 `Packet.lib`
 //! 输出的是**相对**链接搜索路径 `easytier/third_party/<arch>/`，它按链接时的
 //! CWD（即本项目根目录）解析，因此当我们把 easytier 作为依赖编译最终的
-//! `easytier_py.dll` 时找不到该库（LNK1181: Packet.lib）。
+//! `easytier_pyo3.dll` 时找不到该库（LNK1181: Packet.lib）。
 //!
 //! 解决办法：把各架构的 `Packet.lib` 放到本项目 `third_party/<arch>/` 下，
 //! 这里输出绝对路径的链接搜索目录。上游那个无效的相对路径会被链接器忽略。
@@ -28,11 +28,11 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", link_dir.display());
         println!("cargo:rerun-if-changed=third_party/{arch_dir}/Packet.lib");
 
-        // 把运行时 DLL 复制到 python/easytier_py/，供 maturin 随 wheel 分发
+        // 把运行时 DLL 复制到 python/easytier_pyo3/，供 maturin 随 wheel 分发
         // （该分发副本已被 gitignore；构建必然先于 maturin 打包，因此 wheel
         // 自动带上与 target 架构一致的 DLL）。arm64 无 WinDivert64.sys，
         // 且 easytier 在 aarch64 上本就不加载 winfilter，故不复制。
-        let dest_dir = manifest_dir.join("python").join("easytier_py");
+        let dest_dir = manifest_dir.join("python").join("easytier_pyo3");
         let dlls: &[&str] = if arch_dir == "arm64" {
             &["Packet.dll", "wintun.dll"]
         } else {
@@ -42,7 +42,7 @@ fn main() {
             let src = link_dir.join(name);
             if src.exists() {
                 fs::copy(&src, dest_dir.join(name))
-                    .expect("failed to copy runtime DLL into python/easytier_py/");
+                    .expect("failed to copy runtime DLL into python/easytier_pyo3/");
                 println!("cargo:rerun-if-changed=third_party/{arch_dir}/{name}");
             }
         }

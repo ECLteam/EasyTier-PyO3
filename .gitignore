@@ -14,8 +14,8 @@ build/
 
 # 构建期自动生成的运行时 DLL（build.rs 从 third_party/<arch>/ 复制，
 # 随 wheel 分发，不直接跟踪；源文件见 third_party/）
-/python/easytier_py/*.dll
-/python/easytier_py/*.sys
+/python/easytier_pyo3/*.dll
+/python/easytier_pyo3/*.sys
 
 # 会话记忆
 /.memory/

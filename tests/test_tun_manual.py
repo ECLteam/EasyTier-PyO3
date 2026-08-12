@@ -19,14 +19,14 @@ import subprocess
 import sys
 import time
 
-import easytier_py
+import easytier_pyo3
 
 NET = {"network_name": "tun-manual", "network_secret": "tun-manual-secret"}
 
 
 def main() -> int:
     # A：真实 TUN，虚拟 IP 10.144.144.30/24
-    a = easytier_py.Node({
+    a = easytier_pyo3.Node({
         "instance_name": "tun-a",
         "network_identity": NET,
         "ipv4": "10.144.144.30/24",
@@ -34,7 +34,7 @@ def main() -> int:
         "listeners": ["tcp://0.0.0.0:11090"],
     })
     # B：no_tun，虚拟 IP 10.144.144.31（本机无此网卡地址，ping 必须走隧道）
-    b = easytier_py.Node({
+    b = easytier_pyo3.Node({
         "instance_name": "tun-b",
         "network_identity": NET,
         "ipv4": "10.144.144.31/24",

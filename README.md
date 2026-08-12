@@ -12,7 +12,7 @@
 > [NOTICE](NOTICE)。
 
 ```python
-from easytier_py import Node
+from easytier_pyo3 import Node
 
 node = Node({
     "instance_name": "my-node",
@@ -60,7 +60,7 @@ Python 3.11 / 3.12 / 3.13 的 wheel 并运行自测。
 **节点 A：**
 
 ```python
-from easytier_py import Node
+from easytier_pyo3 import Node
 
 node_a = Node({
     "instance_name": "node-a",
@@ -74,7 +74,7 @@ node_a.start()
 **节点 B：**
 
 ```python
-from easytier_py import Node
+from easytier_pyo3 import Node
 
 node_b = Node({
     "instance_name": "node-b",

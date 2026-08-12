@@ -10,7 +10,7 @@
 import threading
 import time
 
-from easytier_py import Node, version
+from easytier_pyo3 import Node, version
 
 print(f"EasyTier 内核版本: {version()}")
 

@@ -188,7 +188,7 @@ fn to_hex(bytes: &[u8]) -> String {
 /// 用 TOML 字符串或 dict 创建（字段与 `easytier-core` 的配置文件一致），
 /// 每个节点拥有独立的 tokio runtime。用完请显式调用 `stop()` 优雅停止；
 /// 对象被回收时仅在后台关闭 runtime，不保证清理 TUN 等系统资源。
-#[pyclass(module = "easytier_py")]
+#[pyclass(module = "easytier_pyo3")]
 struct Node {
     /// 底层 EasyTier 核心实例。
     instance: Arc<NativeCoreInstance>,
@@ -802,9 +802,9 @@ fn register_pyd_dll_search_dir(m: &Bound<'_, PyModule>) {
     }
 }
 
-/// 注册为 Python 模块 `easytier_py`。
+/// 注册为 Python 模块 `easytier_pyo3`。
 #[pymodule]
-fn easytier_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn easytier_pyo3(m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(windows)]
     register_pyd_dll_search_dir(m);
     m.add_function(wrap_pyfunction!(version, m)?)?;

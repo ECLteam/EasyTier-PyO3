@@ -1,6 +1,6 @@
 """EasyTier-PyO3 安装自检 / 功能测试。
 
-在已安装 easytier_py 的虚拟环境中运行:
+在已安装 easytier_pyo3 的虚拟环境中运行:
 
     python tests/test_easytier.py
 
@@ -32,7 +32,7 @@ if _enc not in ("utf-8", "utf8", "gbk", "gb2312", "gb18030", "cp936", "big5", "c
         except (AttributeError, ValueError, OSError):
             pass
 
-import easytier_py
+import easytier_pyo3
 
 # 两个节点共用同一网络标识，才能互相发现。
 NET = {"network_name": "pytest-net", "network_secret": "pytest-secret"}
@@ -52,7 +52,7 @@ def check(name: str, condition: bool, detail: str = "") -> None:
         print(f"  [FAIL] {name}  {detail}")
 
 
-def make_node(name: str, listener: str, peer: Optional[str] = None) -> "easytier_py.Node":
+def make_node(name: str, listener: str, peer: Optional[str] = None) -> "easytier_pyo3.Node":
     """按统一配置创建测试节点。"""
     config = {
         "instance_name": name,
@@ -66,21 +66,21 @@ def make_node(name: str, listener: str, peer: Optional[str] = None) -> "easytier
         config["listeners"] = [listener]
     if peer:
         config["peer"] = [{"uri": peer}]
-    return easytier_py.Node(config)
+    return easytier_pyo3.Node(config)
 
 
 def test_import_and_version() -> None:
     print("[1] 模块导入与 version()")
-    v = easytier_py.version()
+    v = easytier_pyo3.version()
     check("version() 返回非空字符串", isinstance(v, str) and bool(v), f"got {v!r}")
-    check("模块暴露 Node", hasattr(easytier_py, "Node"))
-    check("模块暴露 version", hasattr(easytier_py, "version"))
+    check("模块暴露 Node", hasattr(easytier_pyo3, "Node"))
+    check("模块暴露 version", hasattr(easytier_pyo3, "version"))
 
 
-def test_create_and_start() -> "easytier_py.Node":
+def test_create_and_start() -> "easytier_pyo3.Node":
     print("[2] Node 创建 / 启动 / 状态")
     node = make_node("test-a", "tcp://127.0.0.1:11010")
-    check("node 是 Node 实例", isinstance(node, easytier_py.Node))
+    check("node 是 Node 实例", isinstance(node, easytier_pyo3.Node))
     check("初始状态为 Created", node.state() == "Created", node.state())
 
     node.start()
@@ -97,7 +97,7 @@ def test_create_and_start() -> "easytier_py.Node":
     return node
 
 
-def test_connectors(node: "easytier_py.Node") -> None:
+def test_connectors(node: "easytier_pyo3.Node") -> None:
     print("[3] 手动连接管理")
     node.add_connector("tcp://127.0.0.1:11020")
     conns = node.connectors()
@@ -142,7 +142,7 @@ def test_two_nodes() -> None:
         check("stop() 幂等", a.stop() is None)
 
 
-def test_events(node: "easytier_py.Node") -> None:
+def test_events(node: "easytier_pyo3.Node") -> None:
     print("[5] 事件订阅")
     evs = node.events()
     check("events() 返回列表", isinstance(evs, list))
@@ -185,7 +185,7 @@ def test_concurrent_access() -> None:
     check("并发访问无异常", not results, str(results))
 
 
-def test_stats(node: "easytier_py.Node") -> None:
+def test_stats(node: "easytier_pyo3.Node") -> None:
     print("[6] 快照与统计")
     check("metrics() 返回列表", isinstance(node.metrics(), list))
     check("prometheus_metrics() 返回 str", isinstance(node.prometheus_metrics(), str))

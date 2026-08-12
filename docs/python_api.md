@@ -1,6 +1,6 @@
 # EasyTier-PyO3 Python API 参考
 
-> 模块名：`easytier_py`
+> 模块名：`easytier_pyo3`
 > 版本：0.1.0
 > 支持 Python：3.11 / 3.12 / 3.13
 
@@ -45,7 +45,7 @@ pip install easytier-pyo3
 返回 EasyTier 内核版本号。
 
 ```python
->>> from easytier_py import version
+>>> from easytier_pyo3 import version
 >>> version()
 '2.6.4'
 ```
@@ -73,7 +73,7 @@ TUN 等资源），因此**用完务必调用 `stop()`**。
 > 适合"后台线程等事件 + 主线程查询"的用法。
 
 ```python
-from easytier_py import Node
+from easytier_pyo3 import Node
 
 # 用 dict 创建
 node = Node({
@@ -513,7 +513,7 @@ if event is not None:
 ### 单机双节点连通性测试（不创建 TUN）
 
 ```python
-from easytier_py import Node
+from easytier_pyo3 import Node
 import time
 
 net = {"network_name": "demo", "network_secret": "demo-secret"}
@@ -556,7 +556,7 @@ b.stop()
 ### 事件订阅 + 生命周期管理
 
 ```python
-from easytier_py import Node
+from easytier_pyo3 import Node
 import threading, time
 
 node = Node({

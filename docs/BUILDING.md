@@ -119,12 +119,12 @@ pip install .
 ## 验证安装
 
 ```bash
-python -c "from easytier_py import version; print(version())"
+python -c "from easytier_pyo3 import version; print(version())"
 # 输出类似: 2.6.4
 ```
 
-> 构建产物：`maturin develop` 会直接把 `easytier_py.pyd` 放入虚拟环境，
-> `import easytier_py` 即可使用。
+> 构建产物：`maturin develop` 会直接把 `easytier_pyo3.pyd` 放入虚拟环境，
+> `import easytier_pyo3` 即可使用。
 
 ## CI 自动构建
 
@@ -137,7 +137,7 @@ CI（`.github/workflows/ci.yml` / `publish.yml`）会为每个平台构建 **3.1
 - `publish` 工作流：打 `v*` tag 时构建并发布到 PyPI（Trusted Publishing）
 - Windows：运行时 DLL（`wintun.dll` / `Packet.dll` / `WinDivert64.sys`）由
   `build.rs` 在构建时按 target 架构从 `third_party/<arch>/` 复制到
-  `python/easytier_py/`，随 wheel 自动分发，无需手工 staging（arm64 构建不含
+  `python/easytier_pyo3/`，随 wheel 自动分发，无需手工 staging（arm64 构建不含
   WinDivert64.sys，easytier 在 aarch64 上不支持 winfilter）
 
 ## 构建常见问题
@@ -175,7 +175,7 @@ easytier 的构建脚本给 `Packet.lib` 输出了相对链接路径，作为依
 解析不到（相对路径以最终链接目录为基准）。本项目已在 `third_party/x86_64/` 内置
 `Packet.lib`，并由 `build.rs` 输出绝对链接路径解决，无需手动处理。
 
-**Q7：ARM64 wheel 安装后 `import easytier_py` 报 `not a valid Win32 application`？**
+**Q7：ARM64 wheel 安装后 `import easytier_pyo3` 报 `not a valid Win32 application`？**
 wheel 里的运行时 DLL 与 Python 架构不匹配。`build.rs` 会按 target 架构从
 `third_party/<arch>/`（x86_64/arm64 各有官方 DLL）自动复制进包，官方产物不会
 出现此问题；自行交叉构建时请确认 DLL 来源与 target 一致。
