@@ -8,6 +8,8 @@ on:
 
 env:
   PROTOC_VERSION: 25.3                        # 统一 protoc 版本
+  # macOS runner 网络经代理时拦截 TLS（自签名证书），让 Node.js 使用系统 CA
+  NODE_OPTIONS: --use-system-ca
 
 jobs:
   test:
@@ -25,7 +27,9 @@ jobs:
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
         run: |
-          curl -fsSL https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-osx-x86_64.zip -o /tmp/protoc.zip
+          arch=$(uname -m)
+          if [ "$arch" = "arm64" ]; then protoc_arch="osx-aarch_64"; else protoc_arch="osx-x86_64"; fi
+          curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-${protoc_arch}.zip" -o /tmp/protoc.zip
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           sudo chmod +x /usr/local/bin/protoc
 
@@ -33,11 +37,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # 保留官方 zip 的 include/（google/protobuf/*.proto），否则 protoc 报 File not found
           $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
           Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\protoc.zip"
-          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc"
-          Move-Item -Path "$env:TEMP\protoc\bin\protoc.exe" -Destination "$env:TEMP\protoc.exe" -Force
-          echo "$env:TEMP" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Expand-Archive -Path "$env:TEMP\protoc.zip" -DestinationPath "$env:TEMP\protoc" -Force
+          "PROTOC=$env:TEMP\protoc\bin\protoc.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       # ---- Windows: 缓存并安装 LLVM（bindgen 需要 libclang） ----
       - name: Cache LLVM (Windows)
@@ -90,13 +94,17 @@ jobs:
             curl -fsSL https://github.com/protocolbuffers/protobuf/releases/download/v${{ env.PROTOC_VERSION }}/protoc-${{ env.PROTOC_VERSION }}-linux-x86_64.zip -o /tmp/protoc.zip
             unzip -o /tmp/protoc.zip -d /usr/local
             chmod +x /usr/local/bin/protoc
+            # bindgen（pnet_sys）需要 libclang；pnet_datalink 需要 libpcap 头文件
+            dnf install -y clang libpcap-devel || yum install -y clang libpcap-devel
+          docker-options: --env LIBCLANG_PATH=/usr/lib64
 
-      # ---- 使用 maturin test 自动在所有 Python 版本上运行测试 ----
-      - name: Test wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          command: test
-          args: --release --test "python tests/test_easytier.py"
+      # ---- 安装 wheel 并运行自测（maturin 无 test 子命令，直接装包跑）----
+      - name: Install wheel & run tests
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          python tests/test_easytier.py
 
       # ---- 上传构建产物 ----
       - name: Upload wheels
