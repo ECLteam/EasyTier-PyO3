@@ -25,6 +25,7 @@ pip install easytier-pyo3
 
 - [模块级函数](#模块级函数)
 - [class Node](#class-node)
+  - [配置默认值摘要](#配置默认值摘要)
   - [构造与生命周期](#构造与生命周期)
   - [基础信息](#基础信息)
   - [手动连接管理](#手动连接管理)
@@ -63,6 +64,31 @@ Node(config: Union[str, dict])
 - `config` 为 **TOML 字符串** 时直接作为配置；
 - `config` 为 **dict** 时自动转换为 TOML（dict 中的 `None` 值被忽略）；
 - 字段与 `easytier-core` 配置文件一致，详见 [README 配置说明](../README.md#配置说明)。
+
+#### 配置默认值摘要
+
+未配置的字段取以下默认值（数据来源：easytier-core 源码 `easytier-core/src/config/toml.rs`
+的 `gen_default_flags()` 与 `easytier-core/src/config/mod.rs`；完整表格见
+[README 配置说明](../README.md#配置说明)）：
+
+| 配置项 | 默认值 |
+| --- | --- |
+| `instance_name` | `"default"` |
+| `instance_id` | 自动生成随机 UUID v4 |
+| `network_identity` | `{"network_name": "default", "network_secret": ""}` |
+| `ipv4` / `ipv6` | 未分配（`ipv4` 写成 `/32` 会自动按 `/24` 处理） |
+| `listeners` | 空——节点默认**不监听**（CLI 的 11010 默认端口不适用于本库） |
+| `peer` / `routes` / `proxy_network` / `exit_nodes` 等 | 空 |
+| `dhcp` / `accept_dns` / `enable_exit_node` / `no_tun` 等开关 | `false` |
+| `stun_servers` 系列 | 内置默认服务器（easytier.cn、miwifi、bilibili 等） |
+| `flags.mtu` | `1380` |
+| `flags.default_protocol` | `"tcp"` |
+| `flags.enable_encryption` / `flags.enable_ipv6` | `true` |
+| `flags.encryption_algorithm` | `"aes-gcm"` |
+| `flags.bind_device` | `true` |
+| `flags.foreign_relay_bps_limit` / `flags.instance_recv_bps_limit` | 不限速（`u64::MAX`） |
+| `flags.quic_listen_port` | 自动分配 |
+| `flags.tld_dns_zone` | `"et.net."` |
 
 创建节点**不会**立即启动，需要调用 `start()`。`stop()` 是幂等的，请显式调用以
 优雅停止并释放资源；节点被垃圾回收时只会在后台关闭其运行时（不阻塞、不保证清理

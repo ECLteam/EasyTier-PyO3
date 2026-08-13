@@ -115,52 +115,94 @@ node.remove_connector("tcp://10.0.0.5:11010")
 `Node()` 接受 **TOML 字符串** 或 **Python dict**（dict 中的 `None` 值会被忽略，
 等价于不配置该字段）。
 
-配置字段与 `easytier-core` 的配置文件一致：
+配置字段与 `easytier-core` 的配置文件一致（缺省值 = 不配置，行为见"默认值"列）：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `instance_name` | str | 节点名称 |
-| `instance_id` | str(UUID) | 指定节点 ID（一般省略，自动生成） |
-| `ipv4` | str | 虚拟 IPv4 地址，如 `10.144.144.1/24` |
-| `ipv6` | str | 虚拟 IPv6 地址，如 `fd00::1/64` |
-| `dhcp` | bool | 是否启用 DHCP 获取 IPv4 |
-| `network_identity` | dict | `{"network_name": str, "network_secret": str}` |
-| `listeners` | list[str] | 监听地址，如 `tcp://0.0.0.0:11010` |
-| `mapped_listeners` | list[str] | 端口映射后的公网地址 |
-| `exit_nodes` | list[str] | 出口节点 IP 列表 |
-| `peer` | list[dict] | 手动对端，`{"uri": str, "peer_public_key": str?}` |
-| `proxy_network` | list[dict] | 代理网段 `{"cidr": str, "allow": list[str]?}` |
-| `routes` | list[str] | 路由网段列表 |
-| `socks5_proxy` | str | SOCKS5 代理地址 |
-| `port_forward` | list[dict] | 端口转发配置 |
-| `secure_mode` | dict | 安全模式配置 |
-| `acl` | dict | ACL 规则 |
-| `tcp_whitelist` / `udp_whitelist` | list[str] | ACL 端口白名单 |
-| `stun_servers` / `stun_servers_v6` | list[str] | 自定义 STUN 服务器 |
-| `credential_file` | str | 凭证文件路径 |
-| `flags` | dict | 运行时标志，见下表 |
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `instance_name` | str | `"default"` | 节点名称 |
+| `instance_id` | str(UUID) | 自动生成随机 UUID v4 | 指定节点 ID（一般省略） |
+| `ipv4` | str | 未分配 | 虚拟 IPv4 地址，如 `10.144.144.1/24`（写成 `/32` 会自动按 `/24` 处理） |
+| `ipv6` | str | 未分配 | 虚拟 IPv6 地址，如 `fd00::1/64` |
+| `dhcp` | bool | false | 是否启用 DHCP 获取 IPv4 |
+| `network_identity` | dict | `{"network_name": "default", "network_secret": ""}` | 网络身份 |
+| `listeners` | list[str] | 空（不监听） | 监听地址，如 `tcp://0.0.0.0:11010` |
+| `mapped_listeners` | list[str] | 空 | 端口映射后的公网地址 |
+| `exit_nodes` | list[str] | 空 | 出口节点 IP 列表 |
+| `peer` | list[dict] | 空 | 手动对端，`{"uri": str, "peer_public_key": str?}` |
+| `proxy_network` | list[dict] | 空 | 代理网段 `{"cidr": str, "allow": list[str]?}` |
+| `routes` | list[str] | 空 | 路由网段列表 |
+| `socks5_proxy` | str | 不启用 | SOCKS5 代理地址 |
+| `port_forward` | list[dict] | 空 | 端口转发配置 |
+| `secure_mode` | dict | 不启用 | 安全模式（私钥/公钥）配置 |
+| `acl` | dict | 未配置（放行所有） | ACL 规则 |
+| `tcp_whitelist` / `udp_whitelist` | list[str] | 空 | ACL 端口白名单 |
+| `stun_servers` / `tcp_stun_servers` / `stun_servers_v6` | list[str] | 内置默认服务器（见下） | 自定义 STUN 服务器 |
+| `credential_file` | str | 未配置 | 凭证文件路径 |
+| `flags` | dict | 全部取默认值（见下） | 运行时标志 |
 
-### `flags` 常用项
+### `flags` 字段与默认值
+
+`flags` 里未配置的字段一律取下表默认值（源码 `gen_default_flags()`，
+见 `easytier-core/src/config/toml.rs`）：
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| `no_tun` | false | 不创建 TUN 设备 |
-| `bind_device` | true | 把隧道 socket 绑定到虚拟 IP；同机回环测试（或连接报 WSAEADDRNOTAVAIL/10049 时）请设为 false |
-| `dev_name` | "" | TUN 设备名 |
+| `default_protocol` | `"tcp"` | 默认传输协议 |
+| `dev_name` | `""` | TUN 设备名 |
+| `enable_encryption` | true | 启用加密 |
 | `enable_ipv6` | true | 启用 IPv6 |
 | `mtu` | 1380 | MTU |
-| `default_protocol` | "tcp" | 默认传输协议 |
-| `disable_p2p` | false | 禁用 P2P 直连 |
-| `p2p_only` | false | 仅使用 P2P |
-| `relay_network_whitelist` | "*" | 允许的中继网络白名单 |
-| `enable_encryption` | true | 启用加密 |
-| `encryption_algorithm` | "" | 加密算法 |
-| `multi_thread` | true | 多线程模式 |
-| `accept_dns` | false | 接受 DNS 服务 |
+| `latency_first` | false | 优先选择低延迟链路 |
 | `enable_exit_node` | false | 作为出口节点 |
 | `proxy_forward_by_system` | false | 系统级代理转发 |
+| `no_tun` | false | 不创建 TUN 设备 |
+| `use_smoltcp` | false | 使用用户态 smoltcp 协议栈 |
+| `relay_network_whitelist` | `"*"` | 允许的中继网络白名单 |
+| `disable_p2p` | false | 禁用 P2P 直连 |
+| `p2p_only` | false | 仅使用 P2P |
+| `lazy_p2p` | false | 懒 P2P（先走中继，延迟高再打洞） |
+| `relay_all_peer_rpc` | false | 中继所有对端 RPC |
+| `disable_tcp_hole_punching` | false | 禁用 TCP 打洞 |
+| `disable_udp_hole_punching` | false | 禁用 UDP 打洞 |
+| `disable_sym_hole_punching` | false | 禁用对称型 NAT 打洞 |
+| `disable_upnp` | false | 禁用 UPnP 端口映射 |
+| `multi_thread` | true | 多线程模式 |
+| `multi_thread_count` | 2 | 多线程线程数 |
+| `data_compress_algo` | 无压缩 | 数据压缩算法（如 `zstd`） |
+| `bind_device` | true | 把隧道 socket 绑定到虚拟 IP；同机回环测试（或连接报 WSAEADDRNOTAVAIL/10049 时）请设为 false |
+| `enable_kcp_proxy` | false | 启用 KCP 代理 |
+| `disable_kcp_input` | false | 禁用 KCP 入站 |
+| `disable_relay_kcp` | false | 禁用 KCP 中继 |
+| `enable_relay_foreign_network_kcp` | false | 对外部网络启用 KCP 中继 |
+| `accept_dns` | false | 接受 DNS 服务 |
+| `private_mode` | false | 私密模式 |
+| `enable_quic_proxy` | false | 启用 QUIC 代理 |
+| `disable_quic_input` | false | 禁用 QUIC 入站 |
+| `disable_relay_quic` | false | 禁用 QUIC 中继 |
+| `enable_relay_foreign_network_quic` | false | 对外部网络启用 QUIC 中继 |
+| `quic_listen_port` | 自动分配 | QUIC 监听端口 |
+| `need_p2p` | false | 强制要求 P2P 连接 |
+| `foreign_relay_bps_limit` | 不限速（`u64::MAX`） | 对外中继限速（B/s） |
+| `instance_recv_bps_limit` | 不限速（`u64::MAX`） | 节点接收限速（B/s） |
+| `disable_relay_data` | false | 禁用数据中继 |
+| `enable_udp_broadcast_relay` | false | 启用 UDP 广播中继 |
+| `socket_mark` | 不设置 | Linux socket SO_MARK 标记 |
+| `encryption_algorithm` | `"aes-gcm"` | 加密算法（`aes-gcm` / `aes-256-gcm` / `chacha20` / `xor`） |
+| `tld_dns_zone` | `"et.net."` | 虚拟 DNS 域名后缀 |
 
-完整字段见 `easytier-core` 源码 `crates/easytier-core/src/config/toml.rs`。
+### 其它内置默认值
+
+- **默认 STUN 服务器**（未配置 `stun_servers` 系列字段时使用，源码
+  `easytier-core/src/config/mod.rs`）：
+  - UDP v4：`stun.easytier.cn`、`stun.miwifi.com`、`stun.chat.bilibili.com`、`stun.hitv.com`
+  - TCP：`stun.hot-chilli.net`、`stun.fitauto.ru`、`fwa.lifesizecloud.com`、
+    `global.turn.twilio.com`、`turn.cloudflare.com`、`stun.voip.blackberry.com`、`stun.radiojar.com`
+  - UDP v6：`stun-v6.easytier.cn`
+- **默认监听端口 11010 是 easytier CLI 的默认值，本库 `Node` 不经过 CLI**：
+  不配置 `listeners` 时节点**不会监听任何端口**，请显式指定。
+- 数据来源：easytier-core 源码 `easytier-core/src/config/toml.rs`（`Config` 结构体与
+  `gen_default_flags()`）与 `easytier-core/src/config/mod.rs`（`NetworkIdentity`、
+  `PeerPolicyConfig`、STUN 服务器常量）。
 
 ---
 
