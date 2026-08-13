@@ -108,6 +108,38 @@ node.add_connector("tcp://10.0.0.5:11010")
 node.remove_connector("tcp://10.0.0.5:11010")
 ```
 
+### 端口转发（像 CLI 一样把虚拟 IP 端口绑定到本地）
+
+节点运行中用 `apply_config` 动态添加/覆盖/清空端口转发，格式与 `Node()` 配置一致：
+
+```python
+node = Node({
+    "network_identity": {"network_name": "net1", "network_secret": "secret"},
+    "ipv4": "10.144.144.1/24",
+})
+
+# 运行时添加：本地 8080 → 对端虚拟 IP 10.144.144.2 的 80 端口
+node.apply_config({
+    "port_forward": [
+        {"bind_addr": "127.0.0.1:8080", "dst_addr": "10.144.144.2:80", "proto": "tcp"},
+    ],
+})
+
+# 全量覆盖（原规则清空后生效新规则）
+node.apply_config({
+    "port_forward": [
+        {"bind_addr": "0.0.0.0:9090", "dst_addr": "10.144.144.3:3306", "proto": "tcp"},
+    ],
+})
+
+# 清空全部转发
+node.apply_config({"port_forward": []})
+```
+
+> `proto` 仅支持 `tcp`/`udp`（其它值抛 `ValueError`，与 CLI 校验一致）。
+> `apply_config` 也支持覆盖 `routes` / `exit_nodes` / `proxy_network` 等运行时字段，
+> 详见 [API 文档](docs/python_api.md#apply_configconfig-config-none)。
+
 ---
 
 ## 配置说明
@@ -225,6 +257,7 @@ node.remove_connector("tcp://10.0.0.5:11010")
 - 生命周期：`start()` / `stop()` / `wait()` / `state()` / `is_ready()` / `latest_error()`
 - 信息：`instance_id()` / `instance_name()` / `peer_id()` / `running_listeners()` / `management_events()`
 - 连接：`add_connector(url)` / `remove_connector(url)` / `clear_connectors()` / `connectors()`
+- 运行时配置：`apply_config(config)`（动态覆盖 port_forward / routes / exit_nodes 等，节点须 Running）
 - 快照：`peers()` / `node_info()` / `routes()` / `dump_route()` / `global_peer_map()` / `local_public_ipv6()` / `foreign_networks()`
 - 统计：`metrics()` / `prometheus_metrics()` / `acl_stats()` / `acl_whitelist()`
 - 凭证：`generate_credential()` / `revoke_credential()` / `upsert_credential()` / `credentials()`

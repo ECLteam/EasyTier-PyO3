@@ -467,6 +467,43 @@ upsert_credential(
 node.update_exit_nodes(["1.2.3.4", "5.6.7.8"])
 ```
 
+#### `apply_config(config: Config) -> None`
+
+运行时覆盖节点配置（**与 `__init__` 相同的 TOML 字符串 / dict 格式**）。
+只更新配置中**显式出现**的字段，未出现的字段保持节点当前状态不变。
+集合类字段（`port_forward` / `routes` / `exit_nodes` / `proxy_network` /
+`mapped_listeners` / ACL 白名单）为**全量覆盖**语义。
+节点必须处于 **Running** 状态（与 easytier CLI 的运行时配置修改一致，底层
+复用 `easytier-core` 的 `apply_config_patch`）。
+
+```python
+# 动态添加端口转发：本地 8080 → 虚拟 IP 10.144.144.2 的 80 端口
+node.apply_config({
+    "port_forward": [
+        {"bind_addr": "127.0.0.1:8080",
+         "dst_addr": "10.144.144.2:80", "proto": "tcp"},
+    ],
+})
+
+# 全量覆盖：清空原有转发，改为新的转发
+node.apply_config({
+    "port_forward": [
+        {"bind_addr": "0.0.0.0:9090",
+         "dst_addr": "10.144.144.3:3306", "proto": "tcp"},
+    ],
+})
+
+# 清空所有端口转发
+node.apply_config({"port_forward": []})
+
+# 也可以覆盖 routes / exit_nodes 等，TOML 字符串同样支持
+node.apply_config({"routes": ["192.168.1.0/24"], "exit_nodes": ["10.144.144.1"]})
+```
+
+注意：`port_forward` 的 `proto` 仅支持 `tcp` / `udp`（其它值抛 `ValueError`，
+与 CLI `port-forward add` 校验一致）；数据面转发到虚拟 IP 需节点具备
+TUN 或 smoltcp 数据面（no_tun 模式仅验证配置层端口绑定）。
+
 #### `refresh_acl_groups() -> None`
 
 刷新 ACL 组（读取路由信息后重新计算）。
@@ -531,7 +568,7 @@ if event is not None:
 | `node_info` / `global_peer_map` / `local_public_ipv6` / `foreign_networks` / `foreign_network_route_infos` / `foreign_network_route_summary` / `acl_stats` / `acl_whitelist` / `generate_credential` | `dict` |
 | `dump_route` / `prometheus_metrics` | `str` |
 | `next_event` | `Optional[dict]` |
-| `close_peer_conn` / `update_exit_nodes` / `refresh_acl_groups` / `clear_connectors` | `None` |
+| `close_peer_conn` / `update_exit_nodes` / `apply_config` / `refresh_acl_groups` / `clear_connectors` | `None` |
 
 ---
 
