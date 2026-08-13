@@ -147,36 +147,43 @@ node.apply_config({"port_forward": []})
 `Node()` 接受 **TOML 字符串** 或 **Python dict**（dict 中的 `None` 值会被忽略，
 等价于不配置该字段）。
 
-配置字段与 `easytier-core` 的配置文件一致（缺省值 = 不配置，行为见"默认值"列）：
+配置字段与 `easytier-core` 的配置文件一致（缺省值 = 不配置，行为见"默认值"列）。
+"apply_config 覆盖"列标注该字段能否用 [`apply_config()`](#apply_configconfig-config-none)
+在节点运行中动态修改（**✓** = 可覆盖，**—** = 启动期配置 / 不可运行时修改）：
 
-| 字段 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `instance_name` | str | `"default"` | 节点名称 |
-| `instance_id` | str(UUID) | 自动生成随机 UUID v4 | 指定节点 ID（一般省略） |
-| `hostname` | str | 不设置（空） | 节点主机名（等价 CLI `--hostname`；自动过滤控制字符、截断前 32 字符） |
-| `netns` | str | 未配置 | 网络命名空间（仅 Linux） |
-| `ipv4` | str | 未分配 | 虚拟 IPv4 地址，如 `10.144.144.1/24`（写成 `/32` 会自动按 `/24` 处理） |
-| `ipv6` | str | 未分配 | 虚拟 IPv6 地址，如 `fd00::1/64` |
-| `ipv6_public_addr_provider` | bool | false | 作为 IPv6 公网地址提供者 |
-| `ipv6_public_addr_auto` | bool | false | 自动获取公网 IPv6 前缀 |
-| `ipv6_public_addr_prefix` | str | 未配置 | IPv6 公网前缀，如 `2001:db8:100::/64` |
-| `dhcp` | bool | false | 是否启用 DHCP 获取 IPv4 |
-| `network_identity` | dict | `{"network_name": "default", "network_secret": ""}` | 网络身份 |
-| `listeners` | list[str] | 空（不监听） | 监听地址，如 `tcp://0.0.0.0:11010` |
-| `mapped_listeners` | list[str] | 空 | 端口映射后的公网地址 |
-| `exit_nodes` | list[str] | 空 | 出口节点 IP 列表 |
-| `peer` | list[dict] | 空 | 手动对端，`{"uri": str, "peer_public_key": str?}` |
-| `proxy_network` | list[dict] | 空 | 代理网段 `{"cidr": str, "allow": list[str]?}` |
-| `routes` | list[str] | 空 | 路由网段列表 |
-| `socks5_proxy` | str | 不启用 | SOCKS5 代理地址 |
-| `port_forward` | list[dict] | 空 | 端口转发配置 |
-| `vpn_portal_config` | dict | 不启用 | VPN Portal 配置（WireGuard 客户端接入） |
-| `secure_mode` | dict | 不启用 | 安全模式（私钥/公钥）配置 |
-| `acl` | dict | 未配置（放行所有） | ACL 规则 |
-| `tcp_whitelist` / `udp_whitelist` | list[str] | 空 | ACL 端口白名单 |
-| `stun_servers` / `tcp_stun_servers` / `stun_servers_v6` | list[str] | 内置默认服务器（见下） | 自定义 STUN 服务器 |
-| `credential_file` | str | 未配置 | 凭证文件路径 |
-| `flags` | dict | 全部取默认值（见下） | 运行时标志 |
+| 字段 | 类型 | 默认值 | apply_config 覆盖 | 说明 |
+| --- | --- | --- | --- | --- |
+| `instance_name` | str | `"default"` | — | 节点名称 |
+| `instance_id` | str(UUID) | 自动生成随机 UUID v4 | — | 指定节点 ID（一般省略） |
+| `hostname` | str | 不设置（空） | ✓ | 节点主机名（等价 CLI `--hostname`；自动过滤控制字符、截断前 32 字符） |
+| `netns` | str | 未配置 | — | 网络命名空间（仅 Linux） |
+| `ipv4` | str | 未分配 | ✓ | 虚拟 IPv4 地址，如 `10.144.144.1/24`（写成 `/32` 会自动按 `/24` 处理） |
+| `ipv6` | str | 未分配 | ✓ | 虚拟 IPv6 地址，如 `fd00::1/64` |
+| `ipv6_public_addr_provider` | bool | false | ✓ | 作为 IPv6 公网地址提供者 |
+| `ipv6_public_addr_auto` | bool | false | ✓ | 自动获取公网 IPv6 前缀 |
+| `ipv6_public_addr_prefix` | str | 未配置 | ✓ | IPv6 公网前缀，如 `2001:db8:100::/64` |
+| `dhcp` | bool | false | — | 是否启用 DHCP 获取 IPv4 |
+| `network_identity` | dict | `{"network_name": "default", "network_secret": ""}` | — | 网络身份 |
+| `listeners` | list[str] | 空（不监听） | — | 监听地址，如 `tcp://0.0.0.0:11010` |
+| `mapped_listeners` | list[str] | 空 | ✓ | 端口映射后的公网地址 |
+| `exit_nodes` | list[str] | 空 | ✓ | 出口节点 IP 列表 |
+| `peer` | list[dict] | 空 | — | 手动对端，`{"uri": str, "peer_public_key": str?}`（运行时连接请用 `add_connector()`/`remove_connector()`） |
+| `proxy_network` | list[dict] | 空 | ✓ | 代理网段 `{"cidr": str, "allow": list[str]?}` |
+| `routes` | list[str] | 空 | ✓ | 路由网段列表 |
+| `socks5_proxy` | str | 不启用 | — | SOCKS5 代理地址 |
+| `port_forward` | list[dict] | 空 | ✓ | 端口转发配置 |
+| `vpn_portal_config` | dict | 不启用 | — | VPN Portal 配置（WireGuard 客户端接入） |
+| `secure_mode` | dict | 不启用 | — | 安全模式（私钥/公钥）配置 |
+| `acl` | dict | 未配置（放行所有） | ✓ | ACL 规则 |
+| `tcp_whitelist` / `udp_whitelist` | list[str] | 空 | ✓ | ACL 端口白名单 |
+| `stun_servers` / `tcp_stun_servers` / `stun_servers_v6` | list[str] | 内置默认服务器（见下） | — | 自定义 STUN 服务器 |
+| `credential_file` | str | 未配置 | — | 凭证文件路径 |
+| `flags` | dict | 全部取默认值（见下） | 部分 | 运行时标志（仅 `flags.disable_relay_data` 可用 `apply_config` 覆盖，其余见下） |
+
+> `apply_config` 只覆盖配置中**显式出现**的字段，未出现的字段保持当前状态不变；
+> 集合类字段（`port_forward`/`routes`/`exit_nodes`/`proxy_network`/`mapped_listeners`/
+> ACL 白名单）为**全量覆盖**语义。`peer`（手动对端）不通过 `apply_config` 管理，
+> 运行时连接请用 `add_connector()` / `remove_connector()` / `clear_connectors()`。
 
 ### `flags` 字段与默认值
 
