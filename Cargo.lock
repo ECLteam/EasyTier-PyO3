@@ -1331,6 +1331,7 @@ dependencies = [
 name = "easytier-pyo3"
 version = "0.1.0"
 dependencies = [
+ "cidr",
  "easytier",
  "easytier-core",
  "prost-wkt-types",

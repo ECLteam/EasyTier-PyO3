@@ -1,0 +1,36 @@
+# MAPPING_TABLE: easytier CLI port-forward → easytier-pyo3 Node API
+#
+# 源：easytier v2.6.4 (git#8c15941) CLI 与 easytier-core 运行时配置
+# 目标：本项目 easytier-pyo3（PyO3 绑定）
+# 移植方向：适配新架构（复用 easytier-core 现有运行时能力，Python 侧只做薄封装）
+
+## 配置字段映射（运行时覆盖 / apply_config）
+
+| 源（easytier-core TOML / CLI） | 目标（Node.apply_config dict） | proto patch 字段 | 备注 |
+| --- | --- | --- | --- |
+| `[[port_forward]] {bind_addr,dst_addr,proto}` | `port_forward: [{bind_addr,dst_addr,proto}]` | `InstanceConfigPatch.port_forwards`（CLEAR+ADD 全量覆盖） | CLI `port-forward add/remove/list` 走 `apply_config_patch` 同路径 |
+| `--port-forward tcp://bind/dst`（core.rs:1033-1063） | 同上（URL 形式由 Python 侧拆解或直接给 dict） | 同上 | Python 侧约定 dict 形态 |
+| `routes` | `routes: ["10.0.0.0/8"]` | `InstanceConfigPatch.routes`（CLEAR+ADD） | `cidr::Ipv4Cidr` → proto `Ipv4Inet`（first_address+network_length） |
+| `exit_nodes` | `exit_nodes: ["10.0.0.1"]` | `InstanceConfigPatch.exit_nodes`（CLEAR+ADD） | `std::net::IpAddr` → proto `IpAddr` |
+| `proxy_network` | `proxy_network: [{cidr,mapped_cidr,allow}]` | `InstanceConfigPatch.proxy_networks`（CLEAR+ADD） | **注意**：proto 无 `allow` 字段，`allow` 会被丢弃 |
+| `mapped_listeners` | `mapped_listeners: ["tcp://..."]` | `InstanceConfigPatch.mapped_listeners`（CLEAR+ADD） | `url::Url` → proto `Url` |
+| `hostname` | `hostname: "foo"` | `InstanceConfigPatch.hostname` | 空串视为未设置 |
+| `ipv4` | `ipv4: "10.144.144.1/24"` | `InstanceConfigPatch.ipv4` | `cidr::Ipv4Inet` → proto `Ipv4Inet` |
+| `ipv6` | `ipv6: "fd00::1/64"` | `InstanceConfigPatch.ipv6` | `cidr::Ipv6Inet` → proto `Ipv6Inet` |
+| `acl` / `tcp_whitelist` / `udp_whitelist` | 同字段名 | `InstanceConfigPatch.acl` | proto `AclPatch`；whitelist 用 CLEAR+ADD |
+| `ipv6_public_addr_provider/auto/prefix` | 同字段名 | 对应 patch 字段 | bool / string |
+| `flags.disable_relay_data` | `flags: {disable_relay_data: true}` | `InstanceConfigPatch.disable_relay_data` | 从 `flags` 顶层 key 提取 |
+| `--peer`（运行时 connectors） | `peer: [{uri, peer_public_key?}]` | `InstanceConfigPatch.connectors` | 走 CLI `connectors` patch 语义；仅映射 `uri` |
+| `--listeners` / `network_identity` / `instance_name` | （不支持） | — | 运行时不可变，传入会被忽略（与 CLI 一致：启动期配置） |
+
+## 行为约束
+- `apply_config` 要求节点处于 **Running** 状态（`apply_config_patch` 内部校验，config_patch.rs:26）
+- 只覆盖 dict 中**显式出现**的顶层 key；未出现的字段保持现状（由 TOML 顶层 key 判断）
+- 集合字段语义为**全量覆盖**（CLEAR + 逐条 ADD），与"像创建节点一样写配置"一致
+
+## API 形态
+- Python：`Node.apply_config(config)`（config 与 `__init__` 相同：TOML str 或 dict）
+- Rust 底层：`easytier_core::management::apply_config_patch(&Arc<NativeCoreInstance>, InstanceConfigPatch)`
+- 关键前置 feature（已通过 easytier 默认 features 传递启用）：
+  - `easytier-core/proxy-smoltcp-stack` → `PortForwardAdapter`（port_forward.rs）
+  - `easytier-core/web-client` → `apply_config_patch`（config_patch.rs）
