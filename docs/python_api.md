@@ -75,6 +75,7 @@ Node(config: Union[str, dict])
 | --- | --- |
 | `instance_name` | `"default"` |
 | `instance_id` | 自动生成随机 UUID v4 |
+| `hostname` | 不设置（空） |
 | `network_identity` | `{"network_name": "default", "network_secret": ""}` |
 | `ipv4` / `ipv6` | 未分配（`ipv4` 写成 `/32` 会自动按 `/24` 处理） |
 | `listeners` | 空——节点默认**不监听**（CLI 的 11010 默认端口不适用于本库） |

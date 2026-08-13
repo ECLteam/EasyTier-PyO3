@@ -121,8 +121,13 @@ node.remove_connector("tcp://10.0.0.5:11010")
 | --- | --- | --- | --- |
 | `instance_name` | str | `"default"` | 节点名称 |
 | `instance_id` | str(UUID) | 自动生成随机 UUID v4 | 指定节点 ID（一般省略） |
+| `hostname` | str | 不设置（空） | 节点主机名（等价 CLI `--hostname`；自动过滤控制字符、截断前 32 字符） |
+| `netns` | str | 未配置 | 网络命名空间（仅 Linux） |
 | `ipv4` | str | 未分配 | 虚拟 IPv4 地址，如 `10.144.144.1/24`（写成 `/32` 会自动按 `/24` 处理） |
 | `ipv6` | str | 未分配 | 虚拟 IPv6 地址，如 `fd00::1/64` |
+| `ipv6_public_addr_provider` | bool | false | 作为 IPv6 公网地址提供者 |
+| `ipv6_public_addr_auto` | bool | false | 自动获取公网 IPv6 前缀 |
+| `ipv6_public_addr_prefix` | str | 未配置 | IPv6 公网前缀，如 `2001:db8:100::/64` |
 | `dhcp` | bool | false | 是否启用 DHCP 获取 IPv4 |
 | `network_identity` | dict | `{"network_name": "default", "network_secret": ""}` | 网络身份 |
 | `listeners` | list[str] | 空（不监听） | 监听地址，如 `tcp://0.0.0.0:11010` |
@@ -133,6 +138,7 @@ node.remove_connector("tcp://10.0.0.5:11010")
 | `routes` | list[str] | 空 | 路由网段列表 |
 | `socks5_proxy` | str | 不启用 | SOCKS5 代理地址 |
 | `port_forward` | list[dict] | 空 | 端口转发配置 |
+| `vpn_portal_config` | dict | 不启用 | VPN Portal 配置（WireGuard 客户端接入） |
 | `secure_mode` | dict | 不启用 | 安全模式（私钥/公钥）配置 |
 | `acl` | dict | 未配置（放行所有） | ACL 规则 |
 | `tcp_whitelist` / `udp_whitelist` | list[str] | 空 | ACL 端口白名单 |
