@@ -500,6 +500,31 @@ node.apply_config({"port_forward": []})
 node.apply_config({"routes": ["192.168.1.0/24"], "exit_nodes": ["10.144.144.1"]})
 ```
 
+**支持 `apply_config` 覆盖的字段**（对应 `InstanceConfigPatch`，均为运行时动态生效）：
+
+| 字段 | 覆盖语义 |
+| --- | --- |
+| `port_forward` | 全量覆盖（CLEAR + 逐条 ADD） |
+| `routes` | 全量覆盖 |
+| `exit_nodes` | 全量覆盖 |
+| `proxy_network` | 全量覆盖 |
+| `mapped_listeners` | 全量覆盖 |
+| `acl` / `tcp_whitelist` / `udp_whitelist` | 全量覆盖（ACL 规则 + 白名单） |
+| `hostname` | 单值覆盖 |
+| `ipv4` / `ipv6` | 单值覆盖 |
+| `ipv6_public_addr_provider` / `ipv6_public_addr_auto` | 单值覆盖 |
+| `ipv6_public_addr_prefix` | 单值覆盖 |
+| `flags.disable_relay_data` | 单值覆盖（`flags` 下唯一可覆盖子字段） |
+
+**不支持 `apply_config` 覆盖**（启动期配置，传入会被忽略）：
+
+| 字段 | 说明 |
+| --- | --- |
+| `instance_name` / `instance_id` / `network_identity` / `listeners` / `netns` | 启动期决定，运行时不可变 |
+| `flags` 除 `disable_relay_data` 外的全部字段 | 如 `no_tun` / `mtu` / `bind_device` / 加密与打洞开关等 |
+| `dhcp` / `credential_file` / `secure_mode` / `vpn_portal_config` / `socks5_proxy` / `stun_servers` 系列 | 启动期配置 |
+| `peer` | 运行时连接请用 `add_connector()` / `remove_connector()` / `clear_connectors()`（`peer` 含 `peer_public_key`，不适合映射为运行时 connectors） |
+
 注意：`port_forward` 的 `proto` 仅支持 `tcp` / `udp`（其它值抛 `ValueError`，
 与 CLI `port-forward add` 校验一致）；数据面转发到虚拟 IP 需节点具备
 TUN 或 smoltcp 数据面（no_tun 模式仅验证配置层端口绑定）。
