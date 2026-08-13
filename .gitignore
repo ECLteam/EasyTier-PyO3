@@ -20,6 +20,9 @@ build/
 # 会话记忆
 /.memory/
 
+# 项目知识中枢（决策记录/知识文档，本地维护不入库）
+/docs/junsi-dev-docs/
+
 # 本机工具链配置（含机器相关绝对路径，参考 .cargo/config.toml.example）
 /.cargo/config.toml
 
