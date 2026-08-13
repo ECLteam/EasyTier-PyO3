@@ -19,6 +19,7 @@ uuid = "1"
 serde = "1"
 serde_json = "1"
 toml = "1"
+cidr = "0.3"
 # prost-wkt-types 默认构建需要系统 protoc 命令；启用 vendored-protox 改用纯 Rust
 # 的 protox 编译，避免在未安装 protoc 的环境下构建失败。
 prost-wkt-types = { version = "0.7", features = ["vendored-protox"] }

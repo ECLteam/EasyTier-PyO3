@@ -21,6 +21,16 @@ use easytier::common::global_ctx::GlobalCtxEvent;
 use easytier::instance::factory::{
     NativeCoreInstance, create_native_instance, subscribe_native_instance_event,
 };
+use easytier::proto::api::config::{
+    AclPatch as PbAclPatch, ExitNodePatch as PbExitNodePatch,
+    InstanceConfigPatch, PortForwardPatch as PbPortForwardPatch,
+    ProxyNetworkPatch as PbProxyNetworkPatch, RoutePatch as PbRoutePatch,
+    StringPatch as PbStringPatch, UrlPatch as PbUrlPatch,
+};
+use easytier::proto::common::{
+    Ipv4Inet as PbIpv4Inet, Url as PbUrl,
+};
+use easytier_core::management::apply_config_patch;
 use easytier_core::peers::credential_manager::{
     CredentialCreateOptions, CredentialUpsertOptions,
 };
@@ -136,6 +146,198 @@ fn config_to_toml_text(config: &Bound<'_, PyAny>) -> PyResult<String> {
     let value = json_to_toml_value(&json)
         .ok_or_else(|| PyValueError::new_err("config 不能为空"))?;
     toml::to_string(&value).map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
+/// 解析顶层 TOML，找出用户显式配置了哪些 key。
+fn toml_top_keys(toml_text: &str) -> PyResult<std::collections::BTreeSet<String>> {
+    let value: toml::Value =
+        toml::from_str(toml_text).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut keys = std::collections::BTreeSet::new();
+    if let Some(table) = value.as_table() {
+        for key in table.keys() {
+            keys.insert(key.clone());
+        }
+    }
+    Ok(keys)
+}
+
+/// 把 `cidr::Ipv4Cidr` 转成 proto `Ipv4Inet`（路由/代理网段用）。
+fn cidr_v4_to_pb(cidr: cidr::Ipv4Cidr) -> PbIpv4Inet {
+    PbIpv4Inet {
+        address: Some(cidr.first_address().into()),
+        network_length: cidr.network_length() as u32,
+    }
+}
+
+/// 根据用户在 config 中显式出现的字段，构造运行时配置 patch。
+///
+/// 只 patch 显式出现的 key：集合类字段（port_forward / routes / exit_nodes /
+/// proxy_network / mapped_listeners / acl 白名单）用 CLEAR + 逐条 ADD 实现全量覆盖，
+/// 未出现的字段保持节点当前状态不变。
+fn build_config_patch(toml_text: &str) -> PyResult<InstanceConfigPatch> {
+    use easytier::common::config::ConfigLoader as _;
+    use easytier::proto::api::config::ConfigPatchAction as Action;
+
+    let keys = toml_top_keys(toml_text)?;
+    let config = TomlConfig::new_from_str(toml_text)
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let mut patch = InstanceConfigPatch::default();
+
+    let has = |k: &str| keys.contains(k);
+
+    // 单值字段：hostname / ipv4 / ipv6 / ipv6 公网 / disable_relay_data
+    if has("hostname") {
+        patch.hostname = Some(config.get_hostname());
+    }
+    if has("ipv4") {
+        patch.ipv4 = config.get_ipv4().map(Into::into);
+    }
+    if has("ipv6") {
+        patch.ipv6 = config.get_ipv6().map(Into::into);
+    }
+    if has("ipv6_public_addr_provider") {
+        patch.ipv6_public_addr_provider = Some(config.get_ipv6_public_addr_provider());
+    }
+    if has("ipv6_public_addr_auto") {
+        patch.ipv6_public_addr_auto = Some(config.get_ipv6_public_addr_auto());
+    }
+    if has("ipv6_public_addr_prefix") {
+        patch.ipv6_public_addr_prefix =
+            config.get_ipv6_public_addr_prefix().map(|c| c.to_string());
+    }
+    if has("flags") {
+        // 只取 disable_relay_data 这一个 flags 子字段。
+        let value: toml::Value =
+            toml::from_str(toml_text).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        if let Some(flags) = value.get("flags").and_then(|f| f.as_table()) {
+            if flags.contains_key("disable_relay_data") {
+                patch.disable_relay_data = Some(config.get_flags().disable_relay_data);
+            }
+        }
+    }
+
+    // port_forward：全量覆盖
+    if has("port_forward") {
+        // 与 easytier-cli 的 apply_port_forward_modify 一致：先校验协议
+        // （PortForwardConfigPb 的 socket_type 是枚举，非 tcp/udp 会被静默归一为 tcp）。
+        for f in config.get_port_forwards() {
+            if !matches!(f.proto.to_lowercase().as_str(), "tcp" | "udp") {
+                return Err(PyValueError::new_err(format!(
+                    "port_forward 协议必须是 tcp 或 udp，收到: {:?}",
+                    f.proto
+                )));
+            }
+        }
+        let mut patches = vec![PbPortForwardPatch {
+            action: Action::Clear as i32,
+            cfg: None,
+        }];
+        for f in config.get_port_forwards() {
+            patches.push(PbPortForwardPatch {
+                action: Action::Add as i32,
+                cfg: Some(f.into()),
+            });
+        }
+        patch.port_forwards = patches;
+    }
+
+    // routes：全量覆盖
+    if has("routes") {
+        let mut patches = vec![PbRoutePatch {
+            action: Action::Clear as i32,
+            cidr: None,
+        }];
+        if let Some(routes) = config.get_routes() {
+            for r in routes {
+                patches.push(PbRoutePatch {
+                    action: Action::Add as i32,
+                    cidr: Some(cidr_v4_to_pb(r)),
+                });
+            }
+        }
+        patch.routes = patches;
+    }
+
+    // exit_nodes：全量覆盖
+    if has("exit_nodes") {
+        let mut patches = vec![PbExitNodePatch {
+            action: Action::Clear as i32,
+            node: None,
+        }];
+        for node in config.get_exit_nodes() {
+            patches.push(PbExitNodePatch {
+                action: Action::Add as i32,
+                node: Some(node.into()),
+            });
+        }
+        patch.exit_nodes = patches;
+    }
+
+    // proxy_network：全量覆盖
+    if has("proxy_network") {
+        let mut patches = vec![PbProxyNetworkPatch {
+            action: Action::Clear as i32,
+            cidr: None,
+            mapped_cidr: None,
+        }];
+        for p in config.get_proxy_cidrs() {
+            patches.push(PbProxyNetworkPatch {
+                action: Action::Add as i32,
+                cidr: Some(cidr_v4_to_pb(p.cidr)),
+                mapped_cidr: p.mapped_cidr.map(cidr_v4_to_pb),
+            });
+        }
+        patch.proxy_networks = patches;
+    }
+
+    // mapped_listeners：全量覆盖
+    if has("mapped_listeners") {
+        let mut patches = vec![PbUrlPatch {
+            action: Action::Clear as i32,
+            url: None,
+        }];
+        for u in config.get_mapped_listeners() {
+            patches.push(PbUrlPatch {
+                action: Action::Add as i32,
+                url: Some(PbUrl::from(u)),
+            });
+        }
+        patch.mapped_listeners = patches;
+    }
+
+    // acl（含 tcp/udp 白名单）：全量覆盖
+    if has("acl") || has("tcp_whitelist") || has("udp_whitelist") {
+        let mut acl_patch = PbAclPatch {
+            acl: config.get_acl(),
+            tcp_whitelist: Vec::new(),
+            udp_whitelist: Vec::new(),
+        };
+        if has("tcp_whitelist") {
+            acl_patch
+                .tcp_whitelist
+                .push(PbStringPatch { action: Action::Clear as i32, value: String::new() });
+            for w in config.get_tcp_whitelist() {
+                acl_patch.tcp_whitelist.push(PbStringPatch {
+                    action: Action::Add as i32,
+                    value: w,
+                });
+            }
+        }
+        if has("udp_whitelist") {
+            acl_patch
+                .udp_whitelist
+                .push(PbStringPatch { action: Action::Clear as i32, value: String::new() });
+            for w in config.get_udp_whitelist() {
+                acl_patch.udp_whitelist.push(PbStringPatch {
+                    action: Action::Add as i32,
+                    value: w,
+                });
+            }
+        }
+        patch.acl = Some(acl_patch);
+    }
+
+    Ok(patch)
 }
 
 /// 把 `serde_json::Value` 转回 Python 对象（dict / list / str / int / float / bool / None）。
@@ -667,6 +869,30 @@ impl Node {
         run_blocking(py, &self.instance, &self.handle(), move |i| async move {
             i.update_exit_nodes(ips).await;
         })
+    }
+
+    /// 运行时覆盖节点配置（与创建时的配置格式一致：TOML 字符串或 dict）。
+    ///
+    /// 只更新配置中显式出现的字段，未出现的字段保持当前状态不变。
+    /// 集合类字段（`port_forward` / `routes` / `exit_nodes` / `proxy_network` /
+    /// `mapped_listeners` / ACL 白名单）为**全量覆盖**语义。
+    /// 节点必须处于 Running 状态（与 easytier CLI 的运行时配置修改一致）。
+    ///
+    /// 示例：
+    /// ```python
+    /// node.apply_config({
+    ///     "port_forward": [
+    ///         {"bind_addr": "127.0.0.1:8080", "dst_addr": "10.144.144.2:80", "proto": "tcp"},
+    ///     ],
+    /// })
+    /// ```
+    fn apply_config(&self, py: Python<'_>, config: &Bound<'_, PyAny>) -> PyResult<()> {
+        let toml_text = config_to_toml_text(config)?;
+        let patch = build_config_patch(&toml_text)?;
+        run_blocking(py, &self.instance, &self.handle(), move |i| async move {
+            apply_config_patch(&i, patch).await
+        })?
+        .map_err(to_py_err)
     }
 
     /// 刷新 ACL 组（读取路由信息后重新计算）。

@@ -200,6 +200,24 @@ class Node:
         """运行时更新出口节点列表。"""
         ...
 
+    def apply_config(self, config: Config) -> None:
+        """运行时覆盖节点配置（与 __init__ 相同的 TOML/dict 格式）。
+
+        只更新配置中显式出现的字段，未出现的字段保持当前状态不变。
+        集合类字段（port_forward / routes / exit_nodes / proxy_network /
+        mapped_listeners / ACL 白名单）为全量覆盖语义。
+        节点必须处于 Running 状态（与 easytier CLI 的运行时配置修改一致）。
+
+        示例（动态添加端口转发，本地端口→虚拟 IP 端口）:
+            node.apply_config({
+                "port_forward": [
+                    {"bind_addr": "127.0.0.1:8080",
+                     "dst_addr": "10.144.144.2:80", "proto": "tcp"},
+                ],
+            })
+        """
+        ...
+
     def refresh_acl_groups(self) -> None:
         """刷新 ACL 组。"""
         ...
