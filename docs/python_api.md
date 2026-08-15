@@ -311,12 +311,27 @@ peer_id 合并而成（CLI 内部就是 `list_peer` + `list_route` 后做 `list_
 | `version` | `routes()` 对应条目的 `version` |
 | 本节点行（`Local`） | `node_info()`（hostname / ipv4_addr / version / stun_info） |
 
-注意：`stats` 里的 `latency_us` / `rx_bytes` / `tx_bytes` 是 pbjson 序列化的
-int64/uint64，在 Python 中是**字符串**，求和/换算前需先 `int()`。
+注意两点：
+- `stats` 里的 `latency_us` / `rx_bytes` / `tx_bytes` 是 pbjson 序列化的 int64/uint64，
+  在 Python 中是**字符串**，求和/换算前需先 `int()`。
+- `routes()` 的 `ipv4_addr` 是 proto `Ipv4Inet` 结构体（`{"address": {"addr": int},
+  "network_length": int}`），`addr` 是该虚拟 IP 的 32 位整数表示，可用标准库
+  `ipaddress` 转成 CIDR 字符串；`node_info()` 的 `ipv4_addr` 则已是 CIDR 字符串
+  （如 `"10.144.144.1/24"`）。
 
 示例：用现有方法拼出与 CLI 一致的 peer 行：
 
 ```python
+import ipaddress
+
+
+def inet_to_cidr(inet: dict | None) -> str:
+    """proto Ipv4Inet（routes() 的 ipv4_addr）-> 'a.b.c.d/prefix' 字符串。"""
+    if not inet:
+        return ""
+    return str(ipaddress.IPv4Interface((inet["address"]["addr"], inet["network_length"])))
+
+
 def cli_peer_table(node: easytier_pyo3.Node) -> list[dict]:
     """等价于 easytier-cli peer 的表格行。"""
     peers = {p["peer_id"]: p for p in node.peers()}
@@ -334,7 +349,7 @@ def cli_peer_table(node: easytier_pyo3.Node) -> list[dict]:
             {c["tunnel"]["tunnel_type"] for c in conns if c.get("tunnel")}
         )
         rows.append({
-            "ipv4": route.get("ipv4_addr") or "",
+            "ipv4": inet_to_cidr(route.get("ipv4_addr")),
             "hostname": route.get("hostname", ""),
             "cost": route.get("cost"),
             "lat(ms)": round(int(stats.get("latency_us") or 0) / 1000.0, 2),
