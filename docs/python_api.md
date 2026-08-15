@@ -292,6 +292,76 @@ node.add_connector("tcp://192.168.1.100:11010")
 
 当前路由快照列表（结构来自 EasyTier 的 proto `Route`，pbjson 序列化）。
 
+#### 对照 CLI：peer 列表如何用现有方法拼出来
+
+`easytier-cli peer` 的表格数据**不是**单个方法直接返回的，而是把三个方法的输出按
+peer_id 合并而成（CLI 内部就是 `list_peer` + `list_route` 后做 `list_peer_route_pair`
+合并）。各列的来源：
+
+| CLI 列 | 数据来源（现有方法） |
+|--------|----------------------|
+| `ipv4` | `routes()` 对应条目的 `ipv4_addr`（CIDR 字符串） |
+| `hostname` | `routes()` 对应条目的 `hostname` |
+| `cost` | `routes()` 对应条目的 `cost` |
+| `lat(ms)` | `peers()` 默认连接（conn_id == `default_conn_id`）的 `conns[].stats.latency_us / 1000` |
+| `loss` | `peers()` 默认连接的 `conns[].loss_rate` |
+| `rx` / `tx` | `peers()` 所有 `conns[].stats.rx_bytes / tx_bytes` 求和 |
+| `tunnel` | `peers()` 所有 `conns[].tunnel.tunnel_type` 去重后逗号连接 |
+| `NAT` | `routes()` 对应条目的 `stun_info.udp_nat_type` |
+| `version` | `routes()` 对应条目的 `version` |
+| 本节点行（`Local`） | `node_info()`（hostname / ipv4_addr / version / stun_info） |
+
+注意：`stats` 里的 `latency_us` / `rx_bytes` / `tx_bytes` 是 pbjson 序列化的
+int64/uint64，在 Python 中是**字符串**，求和/换算前需先 `int()`。
+
+示例：用现有方法拼出与 CLI 一致的 peer 行：
+
+```python
+def cli_peer_table(node: easytier_pyo3.Node) -> list[dict]:
+    """等价于 easytier-cli peer 的表格行。"""
+    peers = {p["peer_id"]: p for p in node.peers()}
+    rows = []
+    for route in node.routes():
+        pid = route["peer_id"]
+        peer = peers.get(pid, {})
+        conns = peer.get("conns", [])
+        default_conn = next(
+            (c for c in conns if c["conn_id"] == peer.get("default_conn_id")),
+            (conns or [None])[0],
+        )
+        stats = (default_conn or {}).get("stats") or {}
+        tunnels = sorted(
+            {c["tunnel"]["tunnel_type"] for c in conns if c.get("tunnel")}
+        )
+        rows.append({
+            "ipv4": route.get("ipv4_addr") or "",
+            "hostname": route.get("hostname", ""),
+            "cost": route.get("cost"),
+            "lat(ms)": round(int(stats.get("latency_us") or 0) / 1000.0, 2),
+            "loss": (default_conn or {}).get("loss_rate", 0),
+            "rx": sum(int(c.get("stats", {}).get("rx_bytes") or 0) for c in conns),
+            "tx": sum(int(c.get("stats", {}).get("tx_bytes") or 0) for c in conns),
+            "tunnel": ",".join(tunnels),
+            "NAT": (route.get("stun_info") or {}).get("udp_nat_type", "Unknown"),
+            "version": route.get("version", "unknown"),
+        })
+    # 本节点行（CLI 中显示为 Local，排在第一位）
+    ni = node.node_info()
+    rows.insert(0, {
+        "ipv4": ni.get("ipv4_addr") or "",
+        "hostname": ni.get("hostname", ""),
+        "cost": "Local",
+        "lat(ms)": "-",
+        "loss": "-",
+        "rx": "-",
+        "tx": "-",
+        "tunnel": "-",
+        "NAT": (ni.get("stun_info") or {}).get("udp_nat_type", "Unknown"),
+        "version": ni.get("version", ""),
+    })
+    return rows
+```
+
 #### `dump_route() -> str`
 
 当前路由表的文本形式，便于调试。
