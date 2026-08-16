@@ -105,11 +105,29 @@ def test_connectors(node: "easytier_pyo3.Node") -> None:
     check("connectors() 含 status 字段", all("status" in c for c in conns), str(conns))
 
     check("remove_connector() 返回 True", node.remove_connector("tcp://127.0.0.1:11020") is True)
-    check("再次 remove 返回 False", node.remove_connector("tcp://127.0.0.1:11020") is False)
+
+    # 正在重连（Connecting）的 connector 移除是异步的：remove 只标记移除，
+    # 要等后台重连任务结束才真正从列表中消失。轮询等待收敛（幂等最终返回 False）。
+    deadline = time.time() + 8
+    removed = False
+    while time.time() < deadline:
+        if node.remove_connector("tcp://127.0.0.1:11020") is False:
+            removed = True
+            break
+        time.sleep(0.2)
+    check("再次 remove 返回 False", removed, str(node.connectors()))
 
     node.add_connector("tcp://127.0.0.1:11020")
     node.clear_connectors()
-    check("clear_connectors() 后为空", node.connectors() == [], str(node.connectors()))
+    # clear 同理：重连中的 connector 需要等重连任务结束才被清掉，轮询等待收敛。
+    deadline = time.time() + 8
+    cleared = False
+    while time.time() < deadline:
+        if node.connectors() == []:
+            cleared = True
+            break
+        time.sleep(0.2)
+    check("clear_connectors() 后为空", cleared, str(node.connectors()))
 
 
 def test_two_nodes() -> None:
