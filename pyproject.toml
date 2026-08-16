@@ -30,5 +30,9 @@ python-source = "python"
 # import 扩展时因缺少 Packet.dll 报 "DLL load failed"（根因见 ADR）。
 include = [
   { path = "easytier_pyo3/*.dll", format = "wheel" },
-  { path = "easytier_pyo3/*.sys", format = "wheel" },
+  { path = "easytier_pyo3/*.sys", format = "wheel" }
 ]
+
+[tool.maturin.sbom]
+# 关闭自动生成的 Rust SBOM（cyclonedx.json，约 750KB 原始大小）。
+rust = false

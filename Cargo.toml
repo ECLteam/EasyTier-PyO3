@@ -24,6 +24,11 @@ cidr = "0.3"
 # 的 protox 编译，避免在未安装 protoc 的环境下构建失败。
 prost-wkt-types = { version = "0.7", features = ["vendored-protox"] }
 
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
 [target.'cfg(windows)'.dependencies]
 # 仅 Windows：把 pyd 所在目录加入进程 DLL 搜索路径，让 easytier 能找到随包分发的
 # wintun.dll（见 src/lib.rs 的 register_pyd_dll_search_dir）。
