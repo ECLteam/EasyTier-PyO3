@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "easytier-pyo3"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python bindings for EasyTier mesh VPN core (PyO3)"
 readme = "README.md"
 # 3.9/3.10 无 Windows ARM64 官方构建，全平台最低支持从 3.11 起（与 CI 构建产物对齐）
